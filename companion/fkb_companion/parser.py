@@ -1,0 +1,279 @@
+from __future__ import annotations
+
+import json
+import re
+from datetime import datetime, timezone
+from typing import Any
+
+from .models import ImportResult, ValidationResult
+
+QA_STATUSES = {"confirmed", "probable", "unconfirmed", "outdated", "conflicting"}
+SECTIONS = ("important_news", "confirmed_decisions", "bugs_and_problems", "rumors")
+
+
+def _record(value: Any) -> bool:
+    return isinstance(value, dict)
+
+
+def _extra_fields(value: dict[str, Any], allowed: set[str], path: str, errors: list[str]) -> None:
+    for field in value:
+        if field not in allowed:
+            errors.append(f"{path}.{field} — неизвестное поле.")
+
+
+def _string(value: Any, path: str, errors: list[str], nullable: bool = False) -> str | None:
+    if isinstance(value, str):
+        return value
+    if nullable and value is None:
+        return None
+    errors.append(f"{path} должен быть строкой" + (" или null" if nullable else "") + ".")
+    return "" if not nullable else None
+
+
+def _string_array(value: Any, path: str, errors: list[str]) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append(f"{path} должен быть массивом строк.")
+        return []
+    return value
+
+
+def _section_item(value: Any, path: str, errors: list[str]) -> dict[str, Any]:
+    if not _record(value):
+        errors.append(f"{path} должен быть объектом.")
+        return {"title": "", "details": "", "status": "", "source_post_urls": [], "external_urls": []}
+    _extra_fields(value, {"title", "details", "status", "source_post_urls", "external_urls"}, path, errors)
+    return {
+        "title": _string(value.get("title"), f"{path}.title", errors) or "",
+        "details": _string(value.get("details"), f"{path}.details", errors) or "",
+        "status": _string(value.get("status"), f"{path}.status", errors) or "",
+        "source_post_urls": _string_array(value.get("source_post_urls"), f"{path}.source_post_urls", errors),
+        "external_urls": _string_array(value.get("external_urls"), f"{path}.external_urls", errors),
+    }
+
+
+def _empty_qa() -> dict[str, Any]:
+    return {
+        "question": "", "short_answer": "", "detailed_answer": "", "status": "unconfirmed",
+        "tags": [], "device_topic": "", "source_post_urls": [], "external_urls": [],
+        "first_seen_at": None, "updated_at": None, "confidence_note": "",
+    }
+
+
+def _qa_item(value: Any, path: str, errors: list[str]) -> dict[str, Any]:
+    if not _record(value):
+        errors.append(f"{path} должен быть объектом.")
+        return _empty_qa()
+    _extra_fields(value, {"question", "short_answer", "detailed_answer", "status", "tags", "device_topic", "source_post_urls", "external_urls", "first_seen_at", "updated_at", "confidence_note"}, path, errors)
+    status = _string(value.get("status"), f"{path}.status", errors) or "unconfirmed"
+    if status not in QA_STATUSES:
+        errors.append(f"{path}.status имеет недопустимое значение.")
+        status = "unconfirmed"
+    return {
+        "question": _string(value.get("question"), f"{path}.question", errors) or "",
+        "short_answer": _string(value.get("short_answer"), f"{path}.short_answer", errors) or "",
+        "detailed_answer": _string(value.get("detailed_answer"), f"{path}.detailed_answer", errors) or "",
+        "status": status,
+        "tags": _string_array(value.get("tags"), f"{path}.tags", errors),
+        "device_topic": _string(value.get("device_topic"), f"{path}.device_topic", errors) or "",
+        "source_post_urls": _string_array(value.get("source_post_urls"), f"{path}.source_post_urls", errors),
+        "external_urls": _string_array(value.get("external_urls"), f"{path}.external_urls", errors),
+        "first_seen_at": _string(value.get("first_seen_at"), f"{path}.first_seen_at", errors, nullable=True),
+        "updated_at": _string(value.get("updated_at"), f"{path}.updated_at", errors, nullable=True),
+        "confidence_note": _string(value.get("confidence_note"), f"{path}.confidence_note", errors) or "",
+    }
+
+
+def validate_ai_response(value: Any) -> ValidationResult:
+    errors: list[str] = []
+    if not _record(value):
+        return ValidationResult(False, None, ["Ответ должен быть JSON-объектом."])
+    _extra_fields(value, {"schema_version", "report", "markdown_summary"}, "root", errors)
+    if value.get("schema_version") != "1.0":
+        errors.append('schema_version должен быть "1.0".')
+    if not _record(value.get("report")):
+        errors.append("Отсутствует объект report.")
+    if not isinstance(value.get("markdown_summary"), str):
+        errors.append("markdown_summary должен быть строкой.")
+    report = value.get("report")
+    if errors or not isinstance(report, dict):
+        return ValidationResult(False, None, errors)
+    _extra_fields(report, {"title", "period", "overview", "important_news", "confirmed_decisions", "bugs_and_problems", "rumors", "links", "things_to_check", "qa", "conflicts"}, "report", errors)
+    period = report.get("period")
+    if not _record(period):
+        errors.append("report.period должен быть объектом.")
+        period = {}
+    else:
+        _extra_fields(period, {"from", "to"}, "report.period", errors)
+    normalized: dict[str, Any] = {
+        "title": _string(report.get("title"), "report.title", errors) or "",
+        "period": {
+            "from": _string(period.get("from"), "report.period.from", errors, nullable=True),
+            "to": _string(period.get("to"), "report.period.to", errors, nullable=True),
+        },
+        "overview": _string(report.get("overview"), "report.overview", errors) or "",
+        "important_news": [], "confirmed_decisions": [], "bugs_and_problems": [], "rumors": [],
+        "links": [],
+        "things_to_check": _string_array(report.get("things_to_check"), "report.things_to_check", errors),
+        "qa": [],
+        "conflicts": _string_array(report.get("conflicts"), "report.conflicts", errors),
+    }
+    for section in SECTIONS:
+        values = report.get(section)
+        if not isinstance(values, list):
+            errors.append(f"report.{section} должен быть массивом.")
+        else:
+            normalized[section] = [_section_item(item, f"report.{section}[{index}]", errors) for index, item in enumerate(values)]
+    links = report.get("links")
+    if not isinstance(links, list):
+        errors.append("report.links должен быть массивом.")
+    else:
+        for index, item in enumerate(links):
+            path = f"report.links[{index}]"
+            if not _record(item):
+                errors.append(f"{path} должен быть объектом.")
+                continue
+            _extra_fields(item, {"url", "annotation", "source_post_urls"}, path, errors)
+            normalized["links"].append({
+                "url": _string(item.get("url"), f"{path}.url", errors) or "",
+                "annotation": _string(item.get("annotation"), f"{path}.annotation", errors) or "",
+                "source_post_urls": _string_array(item.get("source_post_urls"), f"{path}.source_post_urls", errors),
+            })
+    qa = report.get("qa")
+    if not isinstance(qa, list):
+        errors.append("report.qa должен быть массивом.")
+    else:
+        normalized["qa"] = [_qa_item(item, f"report.qa[{index}]", errors) for index, item in enumerate(qa)]
+    if errors:
+        return ValidationResult(False, None, errors)
+    return ValidationResult(
+        True,
+        {"schema_version": "1.0", "report": normalized, "markdown_summary": value["markdown_summary"]},
+        [],
+    )
+
+
+def _find_json_object(raw: str) -> str | None:
+    start = raw.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(raw)):
+        char = raw[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return raw[start : index + 1]
+    return None
+
+
+def _markdown_qa(raw: str) -> tuple[list[dict[str, Any]], list[str]]:
+    entries: list[dict[str, Any]] = []
+    unrecognized: list[str] = []
+    current: dict[str, Any] | None = None
+    in_qa = False
+
+    def save() -> None:
+        nonlocal current
+        if not current:
+            return
+        if current["question"] and (current["short_answer"] or current["detailed_answer"]):
+            entries.append(current)
+        elif current["question"]:
+            unrecognized.append(current["question"])
+        current = None
+
+    for line in raw.splitlines():
+        heading_match = re.match(r"^#{2,6}\s+(.+)$", line)
+        heading = heading_match.group(1).strip() if heading_match else ""
+        if heading:
+            if re.search(r"q\s*&?\s*a|вопрос|ответы|частые вопросы", heading, re.I):
+                save()
+                in_qa = True
+                continue
+            if in_qa and current:
+                save()
+                current = {**_empty_qa(), "question": heading}
+                continue
+        if not in_qa:
+            continue
+        question_match = re.match(r"^(?:[-*]\s*)?(?:вопрос|question)\s*:\s*(.+)$", line, re.I)
+        answer_match = re.match(r"^(?:[-*]\s*)?(?:ответ|answer)\s*:\s*(.+)$", line, re.I)
+        if question_match:
+            save()
+            current = {**_empty_qa(), "question": question_match.group(1).strip()}
+        elif answer_match:
+            if current:
+                current["short_answer"] = answer_match.group(1).strip()
+                current["detailed_answer"] = current["short_answer"]
+            else:
+                unrecognized.append(answer_match.group(1).strip())
+        elif current and line.strip() and not line.strip().startswith("#"):
+            current["detailed_answer"] = f"{current['detailed_answer']}\n{line.strip()}".strip()
+    save()
+    if in_qa and not entries and not unrecognized:
+        unrecognized.append("Раздел Q&A найден, но пары «Вопрос/Ответ» не распознаны.")
+    return entries, unrecognized
+
+
+def import_ai_response(raw: str, source_id: str = "manual-import", topic_id: str = "unknown-topic") -> ImportResult:
+    raw = raw.strip()
+    warnings: list[str] = []
+    payload: dict[str, Any] | None = None
+    valid_json = False
+    json_text = _find_json_object(raw)
+    if json_text:
+        try:
+            parsed = json.loads(json_text)
+            validation = validate_ai_response(parsed)
+            if validation.valid and validation.value:
+                payload = validation.value
+                valid_json = True
+            else:
+                warnings.append("JSON найден, но не прошёл строгую проверку. Сохранена обычная Markdown-сводка.")
+                warnings.extend(validation.errors[:10])
+        except json.JSONDecodeError as exc:
+            warnings.append(f"JSON найден, но повреждён: {exc}")
+    else:
+        warnings.append("В ответе не найден JSON-блок; импортирован как Markdown.")
+    markdown_entries, unrecognized = _markdown_qa(raw)
+    if payload is None:
+        payload = {
+            "schema_version": "1.0",
+            "report": {
+                "title": "Импортированная Markdown-сводка", "period": {"from": None, "to": None},
+                "overview": raw, "important_news": [], "confirmed_decisions": [], "bugs_and_problems": [],
+                "rumors": [], "links": [], "things_to_check": [], "qa": markdown_entries, "conflicts": [],
+            },
+            "markdown_summary": raw,
+        }
+    elif not payload["report"]["qa"] and markdown_entries and not valid_json:
+        payload["report"]["qa"] = markdown_entries
+    report_id = f"report_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+    qa_entries = [{**entry, "related_report_id": report_id} for entry in payload["report"]["qa"]]
+    report = {
+        "report_id": report_id,
+        "source_id": source_id or "manual-import",
+        "topic_id": topic_id or "unknown-topic",
+        "period_from": payload["report"]["period"]["from"],
+        "period_to": payload["report"]["period"]["to"],
+        "raw_ai_response": raw,
+        "parsed_summary": payload["report"]["overview"] or payload["markdown_summary"],
+        "structured_facts": payload["report"],
+        "qa_entries": qa_entries,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return ImportResult(report, valid_json, warnings, [] if valid_json else unrecognized)

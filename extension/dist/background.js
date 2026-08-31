@@ -1,0 +1,1984 @@
+"use strict";
+(() => {
+  // src/core/utils.ts
+  function nowIso() {
+    return (/* @__PURE__ */ new Date()).toISOString();
+  }
+  function makeId(prefix = "id") {
+    const uuid = globalThis.crypto?.randomUUID?.();
+    if (uuid) return `${prefix}_${uuid}`;
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  }
+  function normalizeWhitespace(value) {
+    return value.replace(/\u00a0/g, " ").replace(/[\t\r ]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  function normalizeUrl(value, baseUrl) {
+    try {
+      const url = new URL(value, baseUrl);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+      url.hash = url.hash.replace(/^#(post|entry)[-_]?/i, "#");
+      return url.href;
+    } catch {
+      return null;
+    }
+  }
+  function clampInteger(value, min, max, fallback) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(parsed)));
+  }
+  function parseTopicId(url) {
+    try {
+      const parsed = new URL(url);
+      const showtopic = parsed.searchParams.get("showtopic");
+      if (showtopic) return showtopic;
+      const lofiTopic = parsed.search.match(/[?&]t(\d+)(?:-\d+)?\.html/i)?.[1];
+      if (lofiTopic) return lofiTopic;
+      const pathPart = parsed.pathname.split("/").filter(Boolean).pop();
+      return pathPart || "unknown-topic";
+    } catch {
+      return "unknown-topic";
+    }
+  }
+  function sourceKey(sourceId, postId, fingerprint) {
+    return `${sourceId}:${postId || fingerprint}`;
+  }
+  function postKey(post) {
+    return sourceKey(post.source_id, post.post_id, post.fingerprint);
+  }
+  function stableFingerprint(parts) {
+    let hash = 2166136261;
+    const value = parts.join("");
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `fnv1a-${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  }
+  function sortPostsChronologically(posts) {
+    return posts.map((post, index) => ({ post, index })).sort((a, b) => {
+      const aTime = a.post.posted_at ? Date.parse(a.post.posted_at) : Number.NaN;
+      const bTime = b.post.posted_at ? Date.parse(b.post.posted_at) : Number.NaN;
+      if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
+        return aTime - bTime;
+      }
+      if (Number.isFinite(aTime) !== Number.isFinite(bTime)) return Number.isFinite(aTime) ? -1 : 1;
+      return a.index - b.index;
+    }).map(({ post }) => post);
+  }
+  function uniqueStrings(values) {
+    return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  }
+
+  // src/adapters/dom.ts
+  var HTTP_PROTOCOLS = /* @__PURE__ */ new Set(["http:", "https:"]);
+  function queryFirst(root, selectors) {
+    for (const selector of selectors) {
+      const found = root.querySelector(selector);
+      if (found) return found;
+    }
+    return null;
+  }
+  function elementText(root, selectors) {
+    if (!root) return "";
+    return normalizeWhitespace(queryFirst(root, selectors)?.textContent || "");
+  }
+  function titleFromDocument(document) {
+    return normalizeWhitespace(document.title || "") || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F";
+  }
+  function parsePostedAt(root, selectors) {
+    const element = queryFirst(root, selectors);
+    const elementTextValue = element ? normalizeWhitespace(element.getAttribute("datetime") || element.textContent || "") : "";
+    const rootText = normalizeWhitespace(root.textContent || "");
+    const raw = elementTextValue || rootText.match(/\b\d{1,2}\.\d{1,2}\.\d{2,4}(?:,\s*|\s+)\d{1,2}:\d{2}\b/g)?.at(-1) || "";
+    if (!raw) return null;
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : raw;
+  }
+  function extractQuotes(root, baseUrl) {
+    const quotes = [];
+    for (const quote of Array.from(
+      root.querySelectorAll('.quote, .blockquote, blockquote, .post_quote, [class*="quote"]')
+    )) {
+      const text = normalizeWhitespace(quote.textContent || "");
+      if (!text) continue;
+      const author = normalizeWhitespace(
+        quote.getAttribute("data-author") || queryFirst(quote, [".quote_author", ".quote-header", ".author", "cite"])?.textContent || ""
+      );
+      const sourceLink = Array.from(quote.querySelectorAll("a[href]")).map((anchor) => normalizeUrl(anchor.href, baseUrl)).find((url) => Boolean(url && /findpost|#(?:entry|post)?[-_]?\d+/i.test(url)));
+      quotes.push({ author: author || null, text, source_post_url: sourceLink || null });
+    }
+    return quotes;
+  }
+  function removeNoise(root) {
+    root.querySelectorAll(
+      "script, style, noscript, template, iframe, .quote, .blockquote, blockquote, .post_quote, .signature, .post_signature, .edit, .post-edit, .post_meta, .post-info, .post_author, .post_author_data"
+    ).forEach((node) => node.remove());
+  }
+  function extractBody(root, bodySelectors) {
+    const body = queryFirst(root, bodySelectors);
+    const clone = (body || root).cloneNode(true);
+    removeNoise(clone);
+    return normalizeWhitespace(clone.textContent || "");
+  }
+  function extractLinks(root, baseUrl) {
+    const result = [];
+    for (const anchor of Array.from(root.querySelectorAll("a[href]"))) {
+      const url = normalizeUrl(anchor.getAttribute("href") || "", baseUrl);
+      if (!url) continue;
+      const text = normalizeWhitespace(anchor.textContent || "") || url;
+      if (!result.some((item) => item.url === url)) result.push({ url, text });
+    }
+    return result;
+  }
+  function extractReplyLinks(root, baseUrl) {
+    const result = [];
+    for (const anchor of Array.from(root.querySelectorAll("a[href]"))) {
+      const url = normalizeUrl(anchor.getAttribute("href") || "", baseUrl);
+      if (!url || !/findpost|view=findpost|#(?:entry|post)?[-_]?\d+/i.test(url)) continue;
+      if (!result.includes(url)) result.push(url);
+    }
+    return result;
+  }
+  function imageIsNearKeywords(root, nearbyText, keywords) {
+    if (keywords.length === 0) return false;
+    const scope = normalizeWhitespace(`${root.textContent || ""} ${nearbyText}`).toLocaleLowerCase();
+    return keywords.some((keyword) => keyword.trim() && scope.includes(keyword.trim().toLocaleLowerCase()));
+  }
+  function extractImageUrls(root, baseUrl, mode, keywords, manualSelection) {
+    if (mode === "links") return [];
+    if (mode === "manual" && (!manualSelection || !root.contains(manualSelection.anchorNode))) return [];
+    const images = [];
+    for (const image of Array.from(root.querySelectorAll("img"))) {
+      if (image.closest(".avatar, .user_avatar, .post_author, .emoji, .smilie, .reaction")) continue;
+      if (mode === "keywords" && !imageIsNearKeywords(root, image.alt || "", keywords)) continue;
+      const raw = image.getAttribute("data-src") || image.getAttribute("data-original") || image.getAttribute("src") || "";
+      const url = normalizeUrl(raw, baseUrl);
+      if (!url || !HTTP_PROTOCOLS.has(new URL(url).protocol)) continue;
+      if (!images.includes(url)) images.push(url);
+    }
+    for (const anchor of Array.from(root.querySelectorAll("a[href]"))) {
+      const url = normalizeUrl(anchor.getAttribute("href") || "", baseUrl);
+      if (!url || !/\.(avif|bmp|gif|jpe?g|png|webp)(?:$|[?#])/i.test(url) && !/\/forum\/dl\/post\//i.test(url))
+        continue;
+      if (mode === "keywords" && !imageIsNearKeywords(root, anchor.textContent || "", keywords)) continue;
+      if (!images.includes(url)) images.push(url);
+    }
+    return images;
+  }
+  function findPostElements(document, selectors) {
+    const candidates = [];
+    for (const selector of selectors) {
+      for (const element of Array.from(document.querySelectorAll(selector))) {
+        if (candidates.some((existing) => existing.contains(element) || element.contains(existing))) continue;
+        candidates.push(element);
+      }
+    }
+    return candidates;
+  }
+  function extractPost(element, pageUrl, options, config, metadataRoot = element, authorRoot = null, dateRoot = null) {
+    const bodyRoot = queryFirst(element, config.bodySelectors) || element;
+    const bodyText = extractBody(element, config.bodySelectors);
+    if (bodyText.length < 2) return null;
+    const ownId = element.getAttribute("data-post-id") || element.getAttribute("data-entry-id") || element.getAttribute("id") || element.getAttribute("name") || "";
+    const idElement = ownId ? element : queryFirst(metadataRoot, config.idSelectors) || queryFirst(element, config.idSelectors) || element;
+    const idRaw = idElement.getAttribute("data-post-id") || idElement.getAttribute("data-entry-id") || idElement.getAttribute("id") || idElement.getAttribute("name") || "";
+    const idMatch = idRaw.match(/(?:post|entry|comment)[-_]?(\d+)/i) || idRaw.match(/^(\d{3,})$/);
+    const permalinkElement = queryFirst(metadataRoot, config.permalinkSelectors) || queryFirst(element, config.permalinkSelectors);
+    const permalinkUrl = normalizeUrl(permalinkElement?.getAttribute("href") || "", pageUrl);
+    let postId = idMatch?.[1] || idRaw.match(/^post[_-](.+)$/i)?.[1] || null;
+    if (!postId && permalinkUrl) {
+      try {
+        const parsedPermalink = new URL(permalinkUrl);
+        postId = parsedPermalink.searchParams.get("p") || parsedPermalink.hash.match(/(?:entry|post)[-_]?(\d+)/i)?.[1] || null;
+      } catch {
+      }
+    }
+    let fallbackPostUrl = pageUrl.split("#")[0] || pageUrl;
+    if (postId) {
+      try {
+        const parsedPageUrl = new URL(pageUrl);
+        if (parsedPageUrl.searchParams.get("showtopic")) {
+          parsedPageUrl.hash = "";
+          parsedPageUrl.searchParams.delete("st");
+          parsedPageUrl.searchParams.set("view", "findpost");
+          parsedPageUrl.searchParams.set("p", postId);
+          fallbackPostUrl = parsedPageUrl.href;
+        } else {
+          fallbackPostUrl = `${fallbackPostUrl}#entry${postId}`;
+        }
+      } catch {
+        fallbackPostUrl = `${fallbackPostUrl}#entry${postId}`;
+      }
+    }
+    const canonicalPostUrl = permalinkUrl || fallbackPostUrl;
+    const author = elementText(authorRoot || metadataRoot, config.authorSelectors) || elementText(metadataRoot, config.authorSelectors) || elementText(element, config.authorSelectors) || "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0430\u0432\u0442\u043E\u0440";
+    const postedAt = parsePostedAt(dateRoot || metadataRoot, config.dateSelectors);
+    const quotes = extractQuotes(bodyRoot, pageUrl);
+    const links = extractLinks(bodyRoot, pageUrl);
+    const replyToUrls = extractReplyLinks(bodyRoot, pageUrl);
+    const imageUrls = extractImageUrls(
+      bodyRoot,
+      pageUrl,
+      options.imageMode,
+      options.imageKeywords,
+      options.manualSelection
+    );
+    const fingerprint = stableFingerprint([options.sourceId, options.topicId, author, postedAt || "", bodyText]);
+    const contentHash = stableFingerprint([bodyText, ...links.map((link) => link.url), ...replyToUrls, ...imageUrls]);
+    return {
+      source_id: options.sourceId,
+      topic_id: options.topicId,
+      post_id: postId,
+      canonical_post_url: canonicalPostUrl,
+      fingerprint,
+      author,
+      posted_at: postedAt,
+      page_url: pageUrl,
+      body_text: bodyText,
+      quotes,
+      links,
+      reply_to_urls: uniqueStrings(replyToUrls),
+      image_urls: uniqueStrings(imageUrls),
+      local_image_paths: [],
+      collected_at: nowIso(),
+      content_hash: contentHash
+    };
+  }
+  function pageTitle(document) {
+    return titleFromDocument(document);
+  }
+
+  // src/adapters/pagination.ts
+  function offsetOf(url) {
+    try {
+      const parsed = new URL(url);
+      const fullOffset = parsed.searchParams.get("st");
+      if (fullOffset !== null) {
+        const offset = Number.parseInt(fullOffset, 10);
+        return Number.isFinite(offset) ? offset : null;
+      }
+      const lofiOffset = parsed.search.match(/[?&]t\d+-(\d+)\.html(?:&|$)/i)?.[1];
+      if (lofiOffset) {
+        const offset = Number.parseInt(lofiOffset, 10);
+        return Number.isFinite(offset) ? offset : null;
+      }
+      return 0;
+    } catch {
+      return null;
+    }
+  }
+  function topicToken(url) {
+    try {
+      const parsed = new URL(url);
+      const showTopic = parsed.searchParams.get("showtopic");
+      if (showTopic) return `full:${showTopic}`;
+      const lofiTopic = parsed.search.match(/[?&]t(\d+)(?:-\d+)?\.html/i)?.[1];
+      return lofiTopic ? `lofi:${lofiTopic}` : null;
+    } catch {
+      return null;
+    }
+  }
+  function labelOf(anchor) {
+    return `${anchor.textContent || ""} ${anchor.getAttribute("title") || ""} ${anchor.getAttribute("aria-label") || ""}`.trim().toLocaleLowerCase();
+  }
+  function sameTopic(pageUrl, candidateUrl) {
+    try {
+      const current = new URL(pageUrl);
+      const candidate = new URL(candidateUrl);
+      const currentToken = topicToken(pageUrl);
+      const candidateToken = topicToken(candidateUrl);
+      if (currentToken && candidateToken) return currentToken === candidateToken && candidate.origin === current.origin;
+      return candidate.origin === current.origin && candidate.pathname === current.pathname && candidate.searchParams.get("showtopic") === current.searchParams.get("showtopic");
+    } catch {
+      return false;
+    }
+  }
+  function sameTopicAnchors(document, pageUrl) {
+    return Array.from(document.querySelectorAll("a[href]")).map((anchor) => ({ anchor, url: normalizeUrl(anchor.href, pageUrl) })).filter((item) => Boolean(item.url)).filter((item) => sameTopic(pageUrl, item.url));
+  }
+  function findPreviousPageUrl(document, pageUrl) {
+    const relPrevious = document.querySelector('a[rel="prev"], link[rel="prev"]');
+    const relUrl = relPrevious ? normalizeUrl(relPrevious.href, pageUrl) : null;
+    if (relUrl && relUrl !== pageUrl) return relUrl;
+    const sameTopic2 = sameTopicAnchors(document, pageUrl);
+    const currentOffset = offsetOf(pageUrl);
+    const labelled = sameTopic2.filter(({ anchor }) => {
+      const label = labelOf(anchor);
+      return /предыдущ|назад|previous|\bprev\b|‹|←|\bback\b/.test(label);
+    });
+    const labelledWithLowerOffset = labelled.map((item) => ({ ...item, offset: offsetOf(item.url) })).filter(
+      (item) => item.offset !== null && (currentOffset === null || item.offset < currentOffset)
+    ).sort((a, b) => b.offset - a.offset);
+    if (labelledWithLowerOffset[0]?.url && labelledWithLowerOffset[0].url !== pageUrl)
+      return labelledWithLowerOffset[0].url;
+    if (currentOffset !== null) {
+      const lowerOffsets = sameTopic2.map((item) => ({ ...item, offset: offsetOf(item.url) })).filter((item) => item.offset !== null && item.offset < currentOffset).sort((a, b) => b.offset - a.offset);
+      if (lowerOffsets[0]?.url && lowerOffsets[0].url !== pageUrl) return lowerOffsets[0].url;
+    }
+    return null;
+  }
+  function findLastPageUrl(document, pageUrl) {
+    const currentOffset = offsetOf(pageUrl);
+    if (currentOffset === null) return null;
+    const sameTopic2 = sameTopicAnchors(document, pageUrl);
+    const candidates = sameTopic2.map((item) => ({ ...item, offset: offsetOf(item.url) })).filter((item) => item.offset !== null && item.offset > currentOffset).sort((a, b) => b.offset - a.offset);
+    if (candidates.length === 0) return null;
+    const labelled = candidates.filter(({ anchor }) => /послед|last|конец|»/.test(labelOf(anchor)));
+    return (labelled[0] || candidates[0])?.url || null;
+  }
+
+  // src/adapters/fourpda.ts
+  var FOURPDA_POST_CONFIG = {
+    postSelectors: [
+      ".postwrapper",
+      ".post_wrap",
+      "[data-post-id]",
+      "[data-entry-id]",
+      'div.postcolor[id^="post-"]',
+      "article.post",
+      ".post",
+      '[id^="entry"]',
+      '[id^="post-"]',
+      '[id^="post_"]'
+    ],
+    idSelectors: [
+      "[data-post-id]",
+      "[data-entry-id]",
+      '[id^="post-"]',
+      '[id^="post_"]',
+      '[id^="entry"]',
+      '[name^="entry"]'
+    ],
+    permalinkSelectors: [
+      "a.post_num",
+      "a.post-number",
+      "a.permalink",
+      'a[href*="#entry"]',
+      'a[href*="#post"]',
+      'a[href*="view=findpost"]',
+      'a[href*="showtopic"][href*="#"]'
+    ],
+    authorSelectors: [
+      ".post_author_name",
+      ".post_author-name",
+      '.post_author a[href*="showuser"]',
+      ".post_author .nickname",
+      ".post_author",
+      ".postname",
+      ".normalname",
+      ".nickname",
+      ".username",
+      '[class*="username"]',
+      '[itemprop="author"]'
+    ],
+    dateSelectors: [
+      "time[datetime]",
+      '[itemprop="datePublished"]',
+      ".post_date",
+      ".post-date",
+      ".post_header .date",
+      ".post_footer .date",
+      ".postdate",
+      '[class*="post_date"]',
+      '[class*="postdate"]'
+    ],
+    bodySelectors: [
+      ".post_content_text",
+      ".post_content",
+      ".postcontent",
+      ".post-content",
+      ".entry-content",
+      ".post_body"
+    ]
+  };
+  function isLikelyPost(element) {
+    if (element.matches('div.postcolor[id^="post-"]')) return true;
+    const hasBody = Boolean(queryFirst(element, FOURPDA_POST_CONFIG.bodySelectors));
+    if (!hasBody) return false;
+    const hasPermalink = Boolean(
+      queryFirst(element, [
+        "a.post_num",
+        "a.post-number",
+        "a.permalink",
+        'a[href*="view=findpost"]',
+        'a[href*="findpost"]'
+      ])
+    );
+    const hasDate = Boolean(queryFirst(element, FOURPDA_POST_CONFIG.dateSelectors));
+    const hasAuthor = Boolean(queryFirst(element, FOURPDA_POST_CONFIG.authorSelectors));
+    return hasPermalink || hasDate && hasAuthor;
+  }
+  var FourPdaAdapter = class {
+    name = "4pda";
+    label = "4PDA";
+    canHandle(url) {
+      try {
+        return /(^|\.)4pda\.(to|ru)$/i.test(new URL(url).hostname);
+      } catch {
+        return false;
+      }
+    }
+    parse(document, url, options) {
+      const candidates = findPostElements(document, FOURPDA_POST_CONFIG.postSelectors);
+      const elements = candidates.filter(isLikelyPost);
+      const posts = elements.map((element) => {
+        const mainCell = element.closest('td[id^="post-main-"], td[id*="post-main-"]');
+        const metadataRoot = mainCell?.parentElement || element.closest("tr") || element;
+        const rawId = element.getAttribute("data-post-id") || element.getAttribute("data-entry-id") || element.id || "";
+        const postId = rawId.match(/(?:post|entry)[-_]?(\d+)/i)?.[1] || null;
+        const authorRoot = postId ? document.getElementById(`post-member-${postId}`) : null;
+        return extractPost(element, url, options, FOURPDA_POST_CONFIG, metadataRoot, authorRoot, mainCell);
+      }).filter((post) => Boolean(post));
+      const diagnostics = [];
+      if (elements.length === 0) {
+        diagnostics.push("\u0420\u0430\u0437\u043C\u0435\u0442\u043A\u0430 4PDA \u043D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u0430: \u0431\u043B\u043E\u043A\u0438 \u043F\u043E\u0441\u0442\u043E\u0432 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u044B.");
+      }
+      if (candidates.length > elements.length) {
+        diagnostics.push(
+          `4PDA: \u043E\u0442\u0431\u0440\u043E\u0448\u0435\u043D\u043E ${candidates.length - elements.length} \u0431\u043B\u043E\u043A\u043E\u0432 \u0431\u0435\u0437 \u043F\u0440\u0438\u0437\u043D\u0430\u043A\u043E\u0432 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F (\u043C\u0435\u043D\u044E/\u0441\u043B\u0443\u0436\u0435\u0431\u043D\u0430\u044F \u0440\u0430\u0437\u043C\u0435\u0442\u043A\u0430).`
+        );
+      }
+      if (posts.length < elements.length) {
+        diagnostics.push(`4PDA: \u0438\u0437 ${elements.length} \u0431\u043B\u043E\u043A\u043E\u0432 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u043E ${posts.length} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439.`);
+      }
+      return {
+        title: pageTitle(document),
+        posts,
+        previousUrl: findPreviousPageUrl(document, url),
+        lastUrl: findLastPageUrl(document, url),
+        diagnostics
+      };
+    }
+    findPreviousUrl(document, url) {
+      return findPreviousPageUrl(document, url);
+    }
+  };
+
+  // src/adapters/generic.ts
+  var GENERIC_POST_CONFIG = {
+    postSelectors: [
+      "[data-post-id]",
+      "[data-comment-id]",
+      'article[class*="post"]',
+      ".post",
+      ".comment",
+      '[id^="post-"]',
+      '[id^="comment-"]'
+    ],
+    idSelectors: ["[data-post-id]", "[data-comment-id]", "[id]", "[name]"],
+    permalinkSelectors: ["a.permalink", "a.post_permalink", 'a[href*="#"]', 'a[rel="bookmark"]'],
+    authorSelectors: [
+      '[itemprop="author"]',
+      ".author",
+      ".username",
+      ".user-name",
+      ".post_author_name",
+      '[class*="author"] a'
+    ],
+    dateSelectors: [
+      "time[datetime]",
+      '[itemprop="datePublished"]',
+      ".post_date",
+      ".post-date",
+      ".date",
+      '[class*="date"]'
+    ],
+    bodySelectors: [
+      '[itemprop="text"]',
+      ".post_content",
+      ".post-content",
+      ".entry-content",
+      ".comment-content",
+      ".content"
+    ]
+  };
+  var GenericForumAdapter = class {
+    name = "generic-forum";
+    label = "Generic forum (\u044D\u0432\u0440\u0438\u0441\u0442\u0438\u043A\u0430)";
+    canHandle(url) {
+      return !/4pda\./i.test(url);
+    }
+    parse(document, url, options) {
+      const elements = findPostElements(document, GENERIC_POST_CONFIG.postSelectors);
+      const posts = elements.map((element) => extractPost(element, url, options, GENERIC_POST_CONFIG)).filter((post) => Boolean(post));
+      const diagnostics = [];
+      if (elements.length === 0) {
+        diagnostics.push("\u042D\u0432\u0440\u0438\u0441\u0442\u0438\u043A\u0430 generic-forum \u043D\u0435 \u043D\u0430\u0448\u043B\u0430 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u044E\u0449\u0438\u0435\u0441\u044F \u0431\u043B\u043E\u043A\u0438 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439.");
+      }
+      if (posts.length < elements.length) {
+        diagnostics.push(`\u0418\u0437 ${elements.length} \u043D\u0430\u0439\u0434\u0435\u043D\u043D\u044B\u0445 \u0431\u043B\u043E\u043A\u043E\u0432 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0438\u0437\u0432\u043B\u0435\u0447\u044C ${posts.length} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439.`);
+      }
+      return {
+        title: pageTitle(document),
+        posts,
+        previousUrl: findPreviousPageUrl(document, url),
+        lastUrl: findLastPageUrl(document, url),
+        diagnostics
+      };
+    }
+    findPreviousUrl(document, url) {
+      return findPreviousPageUrl(document, url);
+    }
+  };
+  var GenericArticleAdapter = class {
+    name = "generic-article";
+    label = "Generic article (\u043E\u0434\u043D\u0430 \u0441\u0442\u0430\u0442\u044C\u044F)";
+    canHandle(url) {
+      return !/4pda\./i.test(url);
+    }
+    parse(document, url, options) {
+      const main = document.querySelector('article, main, [role="main"], .article, .post-content');
+      const diagnostics = [];
+      if (!main) diagnostics.push("\u041D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u043E\u0441\u043D\u043E\u0432\u043D\u043E\u0439 \u0431\u043B\u043E\u043A \u0441\u0442\u0430\u0442\u044C\u0438 (article/main).");
+      const post = main ? extractPost(main, url, options, { ...GENERIC_POST_CONFIG, postSelectors: [] }) : null;
+      return {
+        title: pageTitle(document),
+        posts: post ? [post] : [],
+        previousUrl: null,
+        lastUrl: null,
+        diagnostics
+      };
+    }
+    findPreviousUrl() {
+      return null;
+    }
+  };
+
+  // src/adapters/manual.ts
+  var ManualSelectionAdapter = class {
+    name = "manual-selection";
+    label = "Manual selection (\u0432\u044B\u0434\u0435\u043B\u0435\u043D\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442)";
+    canHandle() {
+      return true;
+    }
+    parse(document, url, options) {
+      const selection = options.manualSelection || window.getSelection();
+      const text = selection?.toString().trim() || "";
+      const diagnostics = [];
+      if (!text) diagnostics.push("\u0412\u044B\u0434\u0435\u043B\u0438\u0442\u0435 \u0442\u0435\u043A\u0441\u0442 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435 \u043F\u0435\u0440\u0435\u0434 \u0440\u0443\u0447\u043D\u044B\u043C \u0441\u0431\u043E\u0440\u043E\u043C.");
+      const container = document.createElement("article");
+      container.textContent = text;
+      const post = text ? extractPost(container, url, options, {
+        postSelectors: [],
+        idSelectors: [],
+        permalinkSelectors: [],
+        authorSelectors: [],
+        dateSelectors: [],
+        bodySelectors: []
+      }) : null;
+      return {
+        title: pageTitle(document),
+        posts: post ? [post] : [],
+        previousUrl: null,
+        lastUrl: null,
+        diagnostics: [`\u0420\u0443\u0447\u043D\u043E\u0439 \u0440\u0435\u0436\u0438\u043C: \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A ${options.sourceId}, \u0442\u0435\u043C\u0430 ${parseTopicId(url)}.`, ...diagnostics]
+      };
+    }
+    findPreviousUrl() {
+      return null;
+    }
+  };
+
+  // src/adapters/index.ts
+  var fourPdaAdapter = new FourPdaAdapter();
+  var genericForumAdapter = new GenericForumAdapter();
+  var genericArticleAdapter = new GenericArticleAdapter();
+  var manualSelectionAdapter = new ManualSelectionAdapter();
+  function adapterByName(name) {
+    if (name === fourPdaAdapter.name) return fourPdaAdapter;
+    if (name === genericArticleAdapter.name) return genericArticleAdapter;
+    if (name === manualSelectionAdapter.name) return manualSelectionAdapter;
+    return genericForumAdapter;
+  }
+  function adapterForUrl(url, override = "auto") {
+    if (override !== "auto") return adapterByName(override);
+    if (fourPdaAdapter.canHandle(url)) return fourPdaAdapter;
+    return genericForumAdapter;
+  }
+  function topicUrlFor(url) {
+    try {
+      const parsed = new URL(url);
+      parsed.hash = "";
+      if (/\/lofiversion\/index\.php$/i.test(parsed.pathname)) {
+        const topicId = parseTopicId(url);
+        if (topicId !== "unknown-topic") {
+          parsed.search = `?t${topicId}.html=`;
+          return parsed.href;
+        }
+      }
+      parsed.searchParams.delete("st");
+      parsed.searchParams.delete("view");
+      parsed.searchParams.delete("p");
+      parsed.searchParams.delete("pid");
+      return parsed.href;
+    } catch {
+      return url.split("#")[0] || url;
+    }
+  }
+  function sourceForUrl(url, title = "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F", adapterOverride = "auto") {
+    const adapter = adapterForUrl(url, adapterOverride);
+    const topicUrl = topicUrlFor(url);
+    const parsed = new URL(url);
+    const is4Pda = adapter.name === "4pda";
+    const topicId = is4Pda ? parsed.searchParams.get("showtopic") || parseTopicId(url) || stableFingerprint([topicUrl]) : stableFingerprint([topicUrl]);
+    const sourceId = is4Pda ? `4pda:${topicId}` : `generic:${parsed.hostname}:${topicId}`;
+    return {
+      source_id: sourceId,
+      source_name: is4Pda ? "4PDA" : parsed.hostname,
+      base_url: parsed.origin,
+      topic_url: topicUrl,
+      title: title || topicUrl,
+      adapter_name: adapter.name,
+      last_checkpoint_post_id: null,
+      last_checkpoint_url: null,
+      last_checkpoint_page_url: null,
+      recent_known_ids: [],
+      last_checked_at: null,
+      configuration: {
+        maxPages: 50,
+        delayMs: 1200,
+        imageMode: "links",
+        imageKeywords: [],
+        downloadImages: false
+      },
+      enabled: true
+    };
+  }
+
+  // src/core/db.ts
+  var DB_NAME = "forum-knowledge-base";
+  var DB_VERSION = 1;
+  function requestResult(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("IndexedDB request failed"));
+    });
+  }
+  function transactionDone(transaction) {
+    return new Promise((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("IndexedDB transaction failed"));
+      transaction.onabort = () => reject(transaction.error || new Error("IndexedDB transaction aborted"));
+    });
+  }
+  function deleteByIndex(store, indexName, key) {
+    return new Promise((resolve, reject) => {
+      const request = store.index(indexName).openCursor(IDBKeyRange.only(key));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        cursor.delete();
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error || new Error("IndexedDB cursor failed"));
+    });
+  }
+  async function openDatabase() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains("sources")) db.createObjectStore("sources", { keyPath: "source_id" });
+        if (!db.objectStoreNames.contains("posts")) {
+          const store = db.createObjectStore("posts", { keyPath: "storage_key" });
+          store.createIndex("source_id", "source_id", { unique: false });
+          store.createIndex("posted_at", "posted_at", { unique: false });
+        }
+        if (!db.objectStoreNames.contains("runs")) {
+          const store = db.createObjectStore("runs", { keyPath: "storage_key" });
+          store.createIndex("source_id", "source_id", { unique: false });
+          store.createIndex("created_at", "created_at", { unique: false });
+        }
+        if (!db.objectStoreNames.contains("reports")) {
+          const store = db.createObjectStore("reports", { keyPath: "report_id" });
+          store.createIndex("source_id", "source_id", { unique: false });
+          store.createIndex("created_at", "created_at", { unique: false });
+        }
+        if (!db.objectStoreNames.contains("qa")) {
+          const store = db.createObjectStore("qa", { keyPath: "storage_key" });
+          store.createIndex("source_id", "source_id", { unique: false });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Unable to open IndexedDB"));
+    });
+  }
+  async function getSource(sourceId) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("sources", "readonly");
+      return await requestResult(tx.objectStore("sources").get(sourceId)) || null;
+    } finally {
+      db.close();
+    }
+  }
+  async function getAllSources() {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("sources", "readonly");
+      return await requestResult(tx.objectStore("sources").getAll());
+    } finally {
+      db.close();
+    }
+  }
+  async function putSource(source) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("sources", "readwrite");
+      tx.objectStore("sources").put(source);
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  }
+  async function deletePostsByKeys(keys) {
+    if (keys.length === 0) return;
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("posts", "readwrite");
+      const store = tx.objectStore("posts");
+      keys.forEach((key) => store.delete(key));
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  }
+  async function resetSource(sourceId) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(["sources", "posts", "runs"], "readwrite");
+      tx.objectStore("sources").delete(sourceId);
+      await Promise.all([
+        deleteByIndex(tx.objectStore("posts"), "source_id", sourceId),
+        deleteByIndex(tx.objectStore("runs"), "source_id", sourceId)
+      ]);
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  }
+  async function putPosts(posts) {
+    if (posts.length === 0) return 0;
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("posts", "readwrite");
+      const store = tx.objectStore("posts");
+      for (const post of posts) store.put({ ...post, storage_key: postKey(post) });
+      await transactionDone(tx);
+      return posts.length;
+    } finally {
+      db.close();
+    }
+  }
+  async function getPosts(sourceId) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("posts", "readonly");
+      const store = tx.objectStore("posts");
+      const values = sourceId ? await requestResult(store.index("source_id").getAll(sourceId)) : await requestResult(store.getAll());
+      return values.map(({ storage_key: _storageKey, ...post }) => post);
+    } finally {
+      db.close();
+    }
+  }
+  async function putRun(run) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("runs", "readwrite");
+      tx.objectStore("runs").put({ ...run, storage_key: `${run.source_id}:${run.run_id}` });
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  }
+  async function getLatestRun(sourceId) {
+    const runs = await getRuns(sourceId);
+    return runs[0] || null;
+  }
+  async function getRuns(sourceId) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("runs", "readonly");
+      const store = tx.objectStore("runs");
+      const values = sourceId ? await requestResult(store.index("source_id").getAll(sourceId)) : await requestResult(store.getAll());
+      return values.sort((a, b) => b.created_at.localeCompare(a.created_at)).map(({ storage_key: _storageKey, ...run }) => run);
+    } finally {
+      db.close();
+    }
+  }
+  async function putReport(report) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(["reports", "qa"], "readwrite");
+      tx.objectStore("reports").put(report);
+      const qaStore = tx.objectStore("qa");
+      report.qa_entries.forEach((entry, index) => {
+        const text = `${entry.question}
+${entry.short_answer}
+${entry.detailed_answer}`;
+        const qa = {
+          storage_key: `${report.report_id}:${index}`,
+          report_id: report.report_id,
+          source_id: report.source_id,
+          question: entry.question,
+          text,
+          data: entry
+        };
+        qaStore.put(qa);
+      });
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  }
+  async function getQa(sourceId) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("qa", "readonly");
+      const store = tx.objectStore("qa");
+      const values = sourceId ? await requestResult(store.index("source_id").getAll(sourceId)) : await requestResult(store.getAll());
+      return values.sort((a, b) => a.storage_key.localeCompare(b.storage_key)).map((entry) => entry.data);
+    } finally {
+      db.close();
+    }
+  }
+  async function getReports(sourceId) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction("reports", "readonly");
+      const store = tx.objectStore("reports");
+      const values = sourceId ? await requestResult(store.index("source_id").getAll(sourceId)) : await requestResult(store.getAll());
+      return values.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    } finally {
+      db.close();
+    }
+  }
+  async function searchLocal(query) {
+    const normalized = query.trim().toLocaleLowerCase();
+    const [posts, reports, qa] = await Promise.all([getPosts(), getReports(), getQa()]);
+    if (!normalized)
+      return { posts: posts.slice(-30).reverse(), reports: reports.slice(0, 10), qa: qa.slice(-20).reverse() };
+    return {
+      posts: posts.filter(
+        (post) => `${post.author}
+${post.body_text}
+${post.links.map((link) => link.url).join(" ")}`.toLocaleLowerCase().includes(normalized)
+      ).slice(0, 50),
+      reports: reports.filter(
+        (report) => `${report.parsed_summary}
+${report.raw_ai_response}`.toLocaleLowerCase().includes(normalized)
+      ).slice(0, 20),
+      qa: qa.filter(
+        (entry) => `${entry.question}
+${entry.short_answer}
+${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
+      ).slice(0, 20)
+    };
+  }
+  function newRun(sourceId, postKeys, posts, stopReason) {
+    const dates = posts.map((post) => post.posted_at).filter((date) => Boolean(date)).sort();
+    return {
+      run_id: makeId("run"),
+      source_id: sourceId,
+      post_keys: postKeys,
+      post_count: posts.length,
+      from_posted_at: dates[0] || null,
+      to_posted_at: dates[dates.length - 1] || null,
+      created_at: (/* @__PURE__ */ new Date()).toISOString(),
+      stop_reason: stopReason
+    };
+  }
+
+  // src/core/collection.ts
+  function deduplicatePosts(posts) {
+    const seen = /* @__PURE__ */ new Set();
+    return posts.filter((post) => {
+      const key = postKey(post);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+  function unknownPosts(posts, knownPosts) {
+    const known = new Set(knownPosts.map((post) => postKey(post)));
+    return deduplicatePosts(posts).filter((post) => !known.has(postKey(post)));
+  }
+  function latestPost(posts) {
+    return sortPostsChronologically(posts).at(-1) || null;
+  }
+  function mergeKnownKeys(existing, posts, limit = 1e3) {
+    return Array.from(/* @__PURE__ */ new Set([...existing, ...posts.map((post) => postKey(post))])).slice(-limit);
+  }
+  function postReferenceId(url) {
+    try {
+      const parsed = new URL(url);
+      return parsed.searchParams.get("p") || parsed.searchParams.get("pid") || parsed.hash.match(/(?:entry|post)?[-_]?(\d+)/i)?.[1] || null;
+    } catch {
+      return null;
+    }
+  }
+  function likelyServicePost(post) {
+    const text = `${post.body_text} ${post.author}`.toLocaleLowerCase();
+    const markers = [
+      "\u043C\u043E\u0438 \u043E\u0442\u0432\u0435\u0442\u044B",
+      "\u043C\u043E\u0438 \u0444\u0430\u0439\u043B\u044B",
+      "\u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438",
+      "\u043C\u0435\u043D\u044E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F",
+      "\u043F\u0440\u043E\u0441\u043C\u043E\u0442\u0440 \u043F\u0440\u043E\u0444\u0438\u043B\u044F",
+      "\u043D\u0430\u0439\u0442\u0438 \u0442\u0435\u043C\u044B \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F",
+      "\u043D\u0430\u0439\u0442\u0438 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F",
+      "\u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0432 \u0442\u0435\u043C\u0435"
+    ];
+    const markerCount = markers.filter((marker) => text.includes(marker)).length;
+    const replacementCharacters = (text.match(/�/g) || []).length;
+    const mojibakeMarkers = (text.match(/(?:Р[ђџ]|С[Ђѓ]|Рµ|СЂ)/g) || []).length;
+    return markerCount >= 2 || post.author === "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0430\u0432\u0442\u043E\u0440" && markerCount >= 1 || replacementCharacters >= 2 || mojibakeMarkers >= 3;
+  }
+  function replyContextPosts(newPosts, knownPosts) {
+    const selectedKeys = new Set(newPosts.map((post) => postKey(post)));
+    const directUrls = new Set(newPosts.flatMap((post) => post.reply_to_urls));
+    const directIds = new Set([...directUrls].map(postReferenceId).filter((value) => Boolean(value)));
+    return knownPosts.filter((post) => {
+      if (selectedKeys.has(postKey(post))) return false;
+      return directUrls.has(post.canonical_post_url) || post.post_id !== null && directIds.has(post.post_id);
+    });
+  }
+
+  // src/core/prompt.ts
+  function postBlock(post, index, label) {
+    const links = post.links.length ? post.links.map((link) => `- ${link.text}: ${link.url}`).join("\n") : "- \u043D\u0435\u0442";
+    const images = post.image_urls.length ? post.image_urls.map((url) => `- ${url}`).join("\n") : "- \u043D\u0435\u0442";
+    const quotes = post.quotes.length ? post.quotes.map(
+      (quote) => `- ${quote.author ? `${quote.author}: ` : ""}${quote.text}${quote.source_post_url ? ` (\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u0446\u0438\u0442\u0430\u0442\u044B: ${quote.source_post_url})` : ""}`
+    ).join("\n") : "- \u043D\u0435\u0442";
+    const replies = post.reply_to_urls.length ? post.reply_to_urls.map((url) => `- ${url}`).join("\n") : "- \u043D\u0435\u0442";
+    return [
+      `### ${label} ${index}`,
+      `- \u0410\u0432\u0442\u043E\u0440: ${post.author}`,
+      `- \u0414\u0430\u0442\u0430: ${post.posted_at || "\u043D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u0430"}`,
+      `- \u0418\u0441\u0445\u043E\u0434\u043D\u0430\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430: ${post.page_url}`,
+      `- \u041F\u043E\u0441\u0442: ${post.canonical_post_url}`,
+      "",
+      "\u0422\u0435\u043A\u0441\u0442:",
+      post.body_text,
+      "",
+      "\u0426\u0438\u0442\u0430\u0442\u044B (\u043D\u0435 \u0441\u0447\u0438\u0442\u0430\u0442\u044C \u043D\u043E\u0432\u044B\u043C\u0438 \u0444\u0430\u043A\u0442\u0430\u043C\u0438 \u0431\u0435\u0437 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438):",
+      quotes,
+      "",
+      "\u0421\u0441\u044B\u043B\u043A\u0438 \u0438\u0437 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F:",
+      links,
+      "",
+      "\u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F, \u043D\u0430 \u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u043C\u043E\u0436\u0435\u0442 \u043E\u0442\u0432\u0435\u0447\u0430\u0442\u044C \u044D\u0442\u043E\u0442 \u043F\u043E\u0441\u0442:",
+      replies,
+      "",
+      "\u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F \u0438\u0437 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F (URL; \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u0435\u0441\u043B\u0438 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044C \u043F\u0440\u0438\u043B\u043E\u0436\u0438\u043B \u0444\u0430\u0439\u043B \u0438\u043B\u0438 URL \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D):",
+      images
+    ].join("\n");
+  }
+  function buildPrompt(postsInput, contextPostsInput = [], meta = {}) {
+    const posts = sortPostsChronologically(postsInput);
+    const contextPosts = sortPostsChronologically(contextPostsInput);
+    const source = posts[0] || contextPosts[0];
+    const from = posts.find((post) => post.posted_at)?.posted_at || "\u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E";
+    const to = [...posts].reverse().find((post) => post.posted_at)?.posted_at || "\u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E";
+    const urls = uniqueStrings(posts.map((post) => post.canonical_post_url));
+    const contextUrls = new Set(contextPosts.map((post) => post.canonical_post_url));
+    const unresolvedReplies = uniqueStrings(
+      posts.flatMap((post) => post.reply_to_urls).filter((url) => !contextUrls.has(url))
+    );
+    const responseSchema = `{
+  "schema_version": "1.0",
+  "report": {
+    "title": "\u0441\u0442\u0440\u043E\u043A\u0430",
+    "period": {"from": "ISO \u0438\u043B\u0438 null", "to": "ISO \u0438\u043B\u0438 null"},
+    "overview": "\u043A\u0440\u0430\u0442\u043A\u0430\u044F \u0432\u044B\u0436\u0438\u043C\u043A\u0430",
+    "important_news": [{"title": "", "details": "", "status": "confirmed|probable|unconfirmed|conflicting", "source_post_urls": [], "external_urls": []}],
+    "confirmed_decisions": [],
+    "bugs_and_problems": [],
+    "rumors": [],
+    "links": [{"url": "", "annotation": "", "source_post_urls": []}],
+    "things_to_check": [],
+    "qa": [{"question": "", "short_answer": "", "detailed_answer": "", "status": "confirmed|probable|unconfirmed|outdated|conflicting", "tags": [], "device_topic": "", "source_post_urls": [], "external_urls": [], "first_seen_at": null, "updated_at": null, "confidence_note": ""}],
+    "conflicts": []
+  },
+  "markdown_summary": "\u0442\u0430 \u0436\u0435 \u0441\u0432\u043E\u0434\u043A\u0430 \u0432 Markdown"
+}`;
+    const partHeader = meta.partCount ? [
+      `## \u042D\u0442\u043E \u0447\u0430\u0441\u0442\u044C ${meta.partNumber || 1} \u0438\u0437 ${meta.partCount} \u043E\u0434\u043D\u043E\u0433\u043E \u043F\u0430\u043A\u0435\u0442\u0430`,
+      `\u0418\u0434\u0435\u043D\u0442\u0438\u0444\u0438\u043A\u0430\u0442\u043E\u0440 \u043F\u0430\u043A\u0435\u0442\u0430: ${meta.packetId || "\u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D"}`,
+      "\u0410\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0439 \u044D\u0442\u0443 \u0447\u0430\u0441\u0442\u044C \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E, \u043D\u043E \u043D\u0435 \u043D\u0430\u0437\u044B\u0432\u0430\u0439 \u0435\u0451 \u043F\u043E\u043B\u043D\u043E\u0439 \u0441\u0432\u043E\u0434\u043A\u043E\u0439 \u0432\u0441\u0435\u0439 \u0442\u0435\u043C\u044B.",
+      ""
+    ] : [];
+    return [
+      "# \u0410\u043D\u0430\u043B\u0438\u0437 \u043D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0444\u043E\u0440\u0443\u043C\u0430",
+      "",
+      ...partHeader,
+      "\u0422\u044B \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u0443\u0435\u0448\u044C \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u0440\u0438\u0432\u0435\u0434\u0451\u043D\u043D\u044B\u0435 \u043D\u0438\u0436\u0435 \u043F\u0435\u0440\u0432\u0438\u0447\u043D\u044B\u0435 \u043C\u0430\u0442\u0435\u0440\u0438\u0430\u043B\u044B. \u041D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0435 \u0444\u0430\u043A\u0442\u044B \u0438 \u043D\u0435 \u0432\u044B\u0434\u0430\u0432\u0430\u0439 \u043C\u043D\u0435\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F \u0437\u0430 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435.",
+      "\u0421\u0447\u0438\u0442\u0430\u0439 \u0446\u0438\u0442\u0430\u0442\u044B, \u043F\u0435\u0440\u0435\u0441\u043A\u0430\u0437\u044B \u0438 \u043F\u0440\u0435\u0434\u043F\u043E\u043B\u043E\u0436\u0435\u043D\u0438\u044F \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C\u0438 \u043E\u0442 \u0444\u0430\u043A\u0442\u043E\u0432. \u041E\u0442\u043C\u0435\u0447\u0430\u0439 \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F \u0438 \u0441\u0442\u0435\u043F\u0435\u043D\u044C \u0443\u0432\u0435\u0440\u0435\u043D\u043D\u043E\u0441\u0442\u0438.",
+      "",
+      "## \u0417\u0430\u0434\u0430\u0447\u0430",
+      "1. \u0414\u0430\u0439 \u043A\u043E\u0440\u043E\u0442\u043A\u0443\u044E \u0432\u044B\u0436\u0438\u043C\u043A\u0443 \u0431\u0435\u0437 \u0432\u043E\u0434\u044B \u0438 \u0432\u044B\u0434\u0435\u043B\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u043E\u0432\u044B\u0435 \u0444\u0430\u043A\u0442\u044B \u0438\u043B\u0438 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u0432\u043D\u0443\u0442\u0440\u0438 \u044D\u0442\u043E\u0433\u043E \u043F\u0430\u043A\u0435\u0442\u0430.",
+      "2. \u0420\u0430\u0437\u0434\u0435\u043B\u0438 \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u043D\u0430: \u0432\u0430\u0436\u043D\u044B\u0435 \u043D\u043E\u0432\u043E\u0441\u0442\u0438; \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F; \u0431\u0430\u0433\u0438 \u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B; \u043D\u0435\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0441\u043B\u0443\u0445\u0438; \u0441\u0441\u044B\u043B\u043A\u0438 \u0441 \u043A\u0440\u0430\u0442\u043A\u0438\u043C\u0438 \u0430\u043D\u043D\u043E\u0442\u0430\u0446\u0438\u044F\u043C\u0438; \u0447\u0442\u043E \u0441\u0442\u043E\u0438\u0442 \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E; Q&A-\u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438.",
+      "3. \u0414\u043B\u044F \u043A\u0430\u0436\u0434\u043E\u0433\u043E \u0437\u043D\u0430\u0447\u0438\u043C\u043E\u0433\u043E \u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u044F \u0443\u043A\u0430\u0436\u0438 \u043E\u0434\u0438\u043D \u0438\u043B\u0438 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u0442\u043E\u0447\u043D\u044B\u0445 URL \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u0445 \u043F\u043E\u0441\u0442\u043E\u0432. \u0415\u0441\u043B\u0438 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u043D\u0435\u0442, \u0442\u0430\u043A \u0438 \u043D\u0430\u043F\u0438\u0448\u0438.",
+      "4. \u042F\u0441\u043D\u043E \u0440\u0430\u0437\u043B\u0438\u0447\u0430\u0439 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E, \u0432\u0435\u0440\u043E\u044F\u0442\u043D\u043E, \u043D\u0435\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E, \u0443\u0441\u0442\u0430\u0440\u0435\u043B\u043E \u0438 \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u0442 \u0434\u0440\u0443\u0433 \u0434\u0440\u0443\u0433\u0443.",
+      "5. \u041D\u0435 \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0439, \u043D\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0439 \u0438 \u043D\u0435 \u0441\u0447\u0438\u0442\u0430\u0439 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u044B\u043C\u0438 \u0432\u043D\u0435\u0448\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0442\u043E\u043C\u0443, \u0447\u0442\u043E \u043D\u0430 \u043D\u0438\u0445 \u0435\u0441\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0430. \u0421\u0441\u044B\u043B\u043A\u0438 \u043B\u0438\u0448\u044C \u0430\u043D\u043D\u043E\u0442\u0438\u0440\u0443\u0439.",
+      "6. \u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043E\u0442\u0432\u0435\u0442\u043E\u043C \u043D\u0430 \u0446\u0438\u0442\u0430\u0442\u0443 \u0438\u043B\u0438 \u0434\u0440\u0443\u0433\u043E\u0439 \u043F\u043E\u0441\u0442. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u043F\u043E\u043B\u044F \xAB\u0426\u0438\u0442\u0430\u0442\u044B\xBB \u0438 \xAB\u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\xBB, \u0441\u0432\u044F\u0436\u0438 \u043E\u0442\u0432\u0435\u0442 \u0441 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u043C \u043F\u043E\u0441\u0442\u043E\u043C, \u043D\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u0439 \u0446\u0438\u0442\u0430\u0442\u0443 \u043A\u0430\u043A \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E. \u0415\u0441\u043B\u0438 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A \u043D\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D \u2014 \u0443\u043A\u0430\u0436\u0438, \u0447\u0442\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043D\u0435\u043F\u043E\u043B\u043D\u044B\u0439.",
+      "",
+      "## \u0424\u043E\u0440\u043C\u0430\u0442 \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D",
+      "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0432\u0435\u0434\u0438 \u043E\u0434\u0438\u043D \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u0441\u0445\u0435\u043C\u0435 \u043D\u0438\u0436\u0435. \u0417\u0430\u0442\u0435\u043C \u043F\u043E\u0441\u043B\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 `---MARKDOWN---` \u0432\u044B\u0432\u0435\u0434\u0438 \u0443\u0434\u043E\u0431\u043D\u0443\u044E Markdown-\u0441\u0432\u043E\u0434\u043A\u0443. \u0412\u0441\u0435 \u043C\u0430\u0441\u0441\u0438\u0432\u044B \u0434\u043E\u043B\u0436\u043D\u044B \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C, \u0434\u0430\u0436\u0435 \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u0443\u0441\u0442\u044B\u0435. \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0432 JSON \u043F\u043E\u043B\u044F \u0441 \u0434\u043E\u0433\u0430\u0434\u043A\u0430\u043C\u0438 \u0431\u0435\u0437 \u043F\u043E\u043C\u0435\u0442\u043A\u0438 \u0441\u0442\u0430\u0442\u0443\u0441\u0430.",
+      "\u0421\u0445\u0435\u043C\u0430 (\u044D\u043A\u0432\u0438\u0432\u0430\u043B\u0435\u043D\u0442\u043D\u0430\u044F \u0441\u0442\u0440\u043E\u0433\u0430\u044F JSON Schema):",
+      "```json",
+      responseSchema,
+      "```",
+      "",
+      "## \u041C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0435 \u043F\u0430\u043A\u0435\u0442\u0430",
+      `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${source?.source_id || "\u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D"}`,
+      `\u041F\u0435\u0440\u0438\u043E\u0434 \u043D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439: ${from} \u2014 ${to}`,
+      `\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439: ${posts.length}`,
+      `\u041A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u044B\u0445 \u0441\u0442\u0430\u0440\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439: ${contextPosts.length}`,
+      `URL \u043D\u043E\u0432\u044B\u0445 \u043F\u043E\u0441\u0442\u043E\u0432 \u0432 \u043F\u0430\u043A\u0435\u0442\u0435: ${urls.length}`,
+      "",
+      "## \u041D\u043E\u0432\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u2014 \u0438\u043C\u0435\u043D\u043D\u043E \u0438\u0445 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F \u043D\u0443\u0436\u043D\u043E \u0430\u043D\u0430\u043B\u0438\u0437\u0438\u0440\u043E\u0432\u0430\u0442\u044C",
+      posts.length ? posts.map((post, index) => postBlock(post, index, "\u041D\u043E\u0432\u043E\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435")).join("\n\n") : "\u041D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0432 \u043F\u0430\u043A\u0435\u0442\u0435 \u043D\u0435\u0442.",
+      "",
+      "## \u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u044B\u0435 \u0441\u0442\u0430\u0440\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u2014 \u043D\u0435 \u0441\u0447\u0438\u0442\u0430\u0442\u044C \u043D\u043E\u0432\u044B\u043C\u0438",
+      contextPosts.length ? contextPosts.map((post, index) => postBlock(post, index, "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435")).join("\n\n") : "\u041F\u043E\u0434\u0445\u043E\u0434\u044F\u0449\u0438\u0435 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0443\u0436\u0435 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u044B \u0432 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u0439 \u0431\u0430\u0437\u0435. \u041D\u0435 \u0434\u0435\u043B\u0430\u0439\u0442\u0435 \u0432\u0438\u0434, \u0447\u0442\u043E \u0441\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u043D\u0438\u0445 \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u044B.",
+      "",
+      "## \u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F, \u0434\u043B\u044F \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E",
+      unresolvedReplies.length ? unresolvedReplies.map((url) => `- ${url}`).join("\n") : "- \u043D\u0435\u0442"
+    ].join("\n");
+  }
+  function createManifest(posts, contextPosts, extra = {}) {
+    return JSON.stringify(
+      {
+        format: "forum-knowledge-base-packet",
+        format_version: "1.0",
+        created_at: nowIso(),
+        post_count: posts.length,
+        context_post_count: contextPosts.length,
+        image_count: posts.reduce((total, post) => total + post.image_urls.length, 0),
+        note: "\u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F \u043F\u0440\u0435\u0434\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u044B URL. \u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0430\u044F \u043E\u0442\u043F\u0440\u0430\u0432\u043A\u0430 \u0444\u0430\u0439\u043B\u043E\u0432 \u0432\u043E \u0432\u043D\u0435\u0448\u043D\u0438\u0439 \u0418\u0418 \u043D\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0435\u0442\u0441\u044F.",
+        ...extra
+      },
+      null,
+      2
+    );
+  }
+  function createAiPacket(postsInput, contextPostsInput = []) {
+    const posts = sortPostsChronologically(postsInput);
+    const contextPosts = sortPostsChronologically(contextPostsInput).filter(
+      (context) => !posts.some((post) => post.canonical_post_url === context.canonical_post_url)
+    );
+    const links = posts.flatMap((post) => [
+      ...post.links.map((link) => ({
+        ...link,
+        link_type: "link",
+        post_url: post.canonical_post_url,
+        source_id: post.source_id
+      })),
+      ...post.reply_to_urls.map((url) => ({
+        url,
+        text: "\u0421\u0441\u044B\u043B\u043A\u0430 \u043D\u0430 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435, \u043D\u0430 \u043A\u043E\u0442\u043E\u0440\u043E\u0435 \u043C\u043E\u0436\u0435\u0442 \u043E\u0442\u0432\u0435\u0447\u0430\u0442\u044C \u043F\u043E\u0441\u0442",
+        link_type: "reply",
+        post_url: post.canonical_post_url,
+        source_id: post.source_id
+      }))
+    ]);
+    return {
+      prompt_md: buildPrompt(posts, contextPosts),
+      posts_json: JSON.stringify(posts, null, 2),
+      context_posts_json: JSON.stringify(contextPosts, null, 2),
+      links_json: JSON.stringify(links, null, 2),
+      manifest_json: createManifest(posts, contextPosts),
+      posts,
+      context_posts: contextPosts,
+      created_at: nowIso()
+    };
+  }
+  function splitPosts(posts, maxChars) {
+    const chunks = [];
+    let current = [];
+    let currentSize = 0;
+    for (const post of sortPostsChronologically(posts)) {
+      const estimatedSize = JSON.stringify(post).length + 1200;
+      if (current.length > 0 && currentSize + estimatedSize > maxChars) {
+        chunks.push(current);
+        current = [];
+        currentSize = 0;
+      }
+      current.push(post);
+      currentSize += estimatedSize;
+    }
+    if (current.length > 0) chunks.push(current);
+    return chunks;
+  }
+  function buildCombinePrompt(packetId, partCount) {
+    return [
+      "# \u0418\u0442\u043E\u0433\u043E\u0432\u0430\u044F \u0432\u044B\u0436\u0438\u043C\u043A\u0430 \u0438\u0437 \u0447\u0430\u0441\u0442\u0435\u0439 \u043E\u0434\u043D\u043E\u0433\u043E \u043F\u0430\u043A\u0435\u0442\u0430",
+      "",
+      `\u0418\u0434\u0435\u043D\u0442\u0438\u0444\u0438\u043A\u0430\u0442\u043E\u0440 \u043F\u0430\u043A\u0435\u0442\u0430: ${packetId}`,
+      `\u041E\u0436\u0438\u0434\u0430\u0435\u043C\u043E\u0435 \u043A\u043E\u043B\u0438\u0447\u0435\u0441\u0442\u0432\u043E \u0447\u0430\u0441\u0442\u0435\u0439: ${partCount}`,
+      "",
+      "\u041D\u0438\u0436\u0435 \u0431\u0443\u0434\u0443\u0442 \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u044B \u043F\u0440\u043E\u043C\u0435\u0436\u0443\u0442\u043E\u0447\u043D\u044B\u0435 \u043E\u0442\u0432\u0435\u0442\u044B \u0418\u0418 \u043F\u043E \u0432\u0441\u0435\u043C \u0447\u0430\u0441\u0442\u044F\u043C. \u041E\u0431\u044A\u0435\u0434\u0438\u043D\u0438 \u0438\u0445 \u0432 \u043E\u0434\u0438\u043D \u0438\u0442\u043E\u0433\u043E\u0432\u044B\u0439 \u043E\u0442\u0447\u0451\u0442.",
+      "\u0423\u0434\u0430\u043B\u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u044B, \u0441\u043E\u0445\u0440\u0430\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0430\u043C\u0438 \u0444\u0430\u043A\u0442\u044B, \u043E\u0442\u043C\u0435\u0442\u044C \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F \u0438 \u043D\u0435 \u043F\u0440\u0438\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E.",
+      "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0432\u0435\u0434\u0438 \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u0442\u0440\u043E\u0433\u043E \u0441\u0445\u0435\u043C\u044B 1.0 \u0438\u0437 prompt \u0447\u0430\u0441\u0442\u0435\u0439, \u0437\u0430\u0442\u0435\u043C \u0441\u0442\u0440\u043E\u043A\u0443 ---MARKDOWN--- \u0438 \u0443\u0434\u043E\u0431\u043D\u0443\u044E Markdown-\u0441\u0432\u043E\u0434\u043A\u0443.",
+      "\u0415\u0441\u043B\u0438 \u043A\u0430\u043A\u0430\u044F-\u0442\u043E \u0447\u0430\u0441\u0442\u044C \u043D\u0435 \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u0430, \u0443\u043A\u0430\u0436\u0438 \u044D\u0442\u043E \u0432 overview \u0438\u043B\u0438 conflicts, \u0430 \u043D\u0435 \u0434\u0435\u043B\u0430\u0439 \u0432\u0438\u0434, \u0447\u0442\u043E \u0430\u043D\u0430\u043B\u0438\u0437 \u043F\u043E\u043B\u043E\u043D.",
+      "",
+      "## \u041F\u0440\u043E\u043C\u0435\u0436\u0443\u0442\u043E\u0447\u043D\u044B\u0435 \u043E\u0442\u0432\u0435\u0442\u044B",
+      ...Array.from({ length: partCount }, (_, index) => [
+        `### \u041E\u0442\u0432\u0435\u0442 \u0447\u0430\u0441\u0442\u0438 ${index + 1} \u0438\u0437 ${partCount}`,
+        "[\u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u0441\u044E\u0434\u0430 \u043F\u043E\u043B\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0418\u0418 \u0434\u043B\u044F \u044D\u0442\u043E\u0439 \u0447\u0430\u0441\u0442\u0438]",
+        ""
+      ]).flat()
+    ].join("\n");
+  }
+  function buildPlainText(postsInput, contextPostsInput = []) {
+    const posts = sortPostsChronologically(postsInput);
+    const contextPosts = sortPostsChronologically(contextPostsInput);
+    const plainPost = (post, index, label) => [
+      `${label} ${index + 1}`,
+      `\u0410\u0432\u0442\u043E\u0440: ${post.author}`,
+      `\u0414\u0430\u0442\u0430: ${post.posted_at || "\u043D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u0430"}`,
+      `\u041F\u043E\u0441\u0442: ${post.canonical_post_url}`,
+      `\u0418\u0441\u0445\u043E\u0434\u043D\u0430\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430: ${post.page_url}`,
+      `\u041E\u0442\u0432\u0435\u0442 \u043D\u0430: ${post.reply_to_urls.join(", ") || "\u043D\u0435\u0442 \u0434\u0430\u043D\u043D\u044B\u0445"}`,
+      `\u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u044F: ${post.image_urls.join(", ") || "\u043D\u0435\u0442"}`,
+      "",
+      post.body_text,
+      ""
+    ].join("\n");
+    return [
+      "Forum Knowledge Base \u2014 \u043F\u043E\u043B\u043D\u044B\u0439 \u0442\u0435\u043A\u0441\u0442 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439",
+      "",
+      "\u041D\u043E\u0432\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F:",
+      ...posts.map((post, index) => plainPost(post, index, "\u041D\u043E\u0432\u043E\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435")),
+      "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F:",
+      ...contextPosts.map((post, index) => plainPost(post, index, "\u041A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u043D\u043E\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435"))
+    ].join("\n");
+  }
+  function createAiPacketBundle(postsInput, contextPostsInput = [], maxChars = 3e4, packetId = makeId("packet")) {
+    const groups = splitPosts(postsInput, Math.max(1e4, maxChars));
+    const partCount = Math.max(1, groups.length);
+    const chunks = groups.map((group, index) => {
+      const context = replyContextPosts(group, contextPostsInput);
+      const base = createAiPacket(group, context);
+      const createdAt = nowIso();
+      return {
+        ...base,
+        packet_id: packetId,
+        part_number: index + 1,
+        part_count: partCount,
+        prompt_md: buildPrompt(group, context, { packetId, partNumber: index + 1, partCount }),
+        manifest_json: createManifest(base.posts, base.context_posts, {
+          packet_id: packetId,
+          part_number: index + 1,
+          part_count: partCount
+        }),
+        created_at: createdAt
+      };
+    });
+    return {
+      packet_id: packetId,
+      part_count: partCount,
+      total_post_count: postsInput.length,
+      combine_prompt_md: buildCombinePrompt(packetId, partCount),
+      full_text: buildPlainText(postsInput, contextPostsInput),
+      chunks
+    };
+  }
+
+  // src/core/importer.ts
+  var QA_STATUSES = /* @__PURE__ */ new Set(["confirmed", "probable", "unconfirmed", "outdated", "conflicting"]);
+  var SECTION_NAMES = ["important_news", "confirmed_decisions", "bugs_and_problems", "rumors"];
+  function isRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function checkExtraFields(record, allowed, path, errors) {
+    const allowedSet = new Set(allowed);
+    for (const field of Object.keys(record)) {
+      if (!allowedSet.has(field)) errors.push(`${path}.${field} \u2014 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u043E\u0435 \u043F\u043E\u043B\u0435.`);
+    }
+  }
+  function stringField(record, field, errors, path, allowNull = false) {
+    const value = record[field];
+    if (typeof value === "string") return value;
+    if (allowNull && value === null) return "";
+    errors.push(`${path}.${field} \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0441\u0442\u0440\u043E\u043A\u043E\u0439${allowNull ? " \u0438\u043B\u0438 null" : ""}.`);
+    return "";
+  }
+  function nullableString(record, field, errors, path) {
+    const value = record[field];
+    if (value === null) return null;
+    if (typeof value === "string") return value;
+    errors.push(`${path}.${field} \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0441\u0442\u0440\u043E\u043A\u043E\u0439 \u0438\u043B\u0438 null.`);
+    return null;
+  }
+  function stringArray(value, errors, path) {
+    if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+      errors.push(`${path} \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C \u0441\u0442\u0440\u043E\u043A.`);
+      return [];
+    }
+    return value;
+  }
+  function sectionItem(value, errors, path) {
+    if (!isRecord(value)) {
+      errors.push(`${path} \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C.`);
+      return { title: "", details: "", status: "", source_post_urls: [], external_urls: [] };
+    }
+    checkExtraFields(value, ["title", "details", "status", "source_post_urls", "external_urls"], path, errors);
+    return {
+      title: stringField(value, "title", errors, path),
+      details: stringField(value, "details", errors, path),
+      status: stringField(value, "status", errors, path),
+      source_post_urls: stringArray(value.source_post_urls, errors, `${path}.source_post_urls`),
+      external_urls: stringArray(value.external_urls, errors, `${path}.external_urls`)
+    };
+  }
+  function qaItem(value, errors, path) {
+    if (!isRecord(value)) {
+      errors.push(`${path} \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C.`);
+      return emptyQa();
+    }
+    checkExtraFields(
+      value,
+      [
+        "question",
+        "short_answer",
+        "detailed_answer",
+        "status",
+        "tags",
+        "device_topic",
+        "source_post_urls",
+        "external_urls",
+        "first_seen_at",
+        "updated_at",
+        "confidence_note"
+      ],
+      path,
+      errors
+    );
+    const status = stringField(value, "status", errors, path);
+    if (!QA_STATUSES.has(status)) errors.push(`${path}.status \u0438\u043C\u0435\u0435\u0442 \u043D\u0435\u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C\u043E\u0435 \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435.`);
+    return {
+      question: stringField(value, "question", errors, path),
+      short_answer: stringField(value, "short_answer", errors, path),
+      detailed_answer: stringField(value, "detailed_answer", errors, path),
+      status: QA_STATUSES.has(status) ? status : "unconfirmed",
+      tags: stringArray(value.tags, errors, `${path}.tags`),
+      device_topic: stringField(value, "device_topic", errors, path),
+      source_post_urls: stringArray(value.source_post_urls, errors, `${path}.source_post_urls`),
+      external_urls: stringArray(value.external_urls, errors, `${path}.external_urls`),
+      first_seen_at: nullableString(value, "first_seen_at", errors, path),
+      updated_at: nullableString(value, "updated_at", errors, path),
+      confidence_note: stringField(value, "confidence_note", errors, path)
+    };
+  }
+  function emptyQa() {
+    return {
+      question: "",
+      short_answer: "",
+      detailed_answer: "",
+      status: "unconfirmed",
+      tags: [],
+      device_topic: "",
+      source_post_urls: [],
+      external_urls: [],
+      first_seen_at: null,
+      updated_at: null,
+      confidence_note: ""
+    };
+  }
+  function validateAiResponse(input) {
+    const errors = [];
+    if (!isRecord(input)) return { valid: false, value: null, errors: ["\u041E\u0442\u0432\u0435\u0442 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C JSON-\u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C."] };
+    checkExtraFields(input, ["schema_version", "report", "markdown_summary"], "root", errors);
+    if (input.schema_version !== "1.0") errors.push('schema_version \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C "1.0".');
+    if (!isRecord(input.report)) errors.push("\u041E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442 \u043E\u0431\u044A\u0435\u043A\u0442 report.");
+    if (typeof input.markdown_summary !== "string") errors.push("markdown_summary \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0441\u0442\u0440\u043E\u043A\u043E\u0439.");
+    if (errors.length > 0 || !isRecord(input.report)) return { valid: false, value: null, errors };
+    const report = input.report;
+    checkExtraFields(
+      report,
+      [
+        "title",
+        "period",
+        "overview",
+        "important_news",
+        "confirmed_decisions",
+        "bugs_and_problems",
+        "rumors",
+        "links",
+        "things_to_check",
+        "qa",
+        "conflicts"
+      ],
+      "report",
+      errors
+    );
+    const period = report.period;
+    if (!isRecord(period)) errors.push("report.period \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C.");
+    if (isRecord(period)) checkExtraFields(period, ["from", "to"], "report.period", errors);
+    const resultPeriod = isRecord(period) ? {
+      from: nullableString(period, "from", errors, "report.period"),
+      to: nullableString(period, "to", errors, "report.period")
+    } : { from: null, to: null };
+    const normalized = {
+      title: stringField(report, "title", errors, "report"),
+      period: resultPeriod,
+      overview: stringField(report, "overview", errors, "report"),
+      important_news: [],
+      confirmed_decisions: [],
+      bugs_and_problems: [],
+      rumors: [],
+      links: [],
+      things_to_check: stringArray(report.things_to_check, errors, "report.things_to_check"),
+      qa: [],
+      conflicts: stringArray(report.conflicts, errors, "report.conflicts")
+    };
+    for (const section of SECTION_NAMES) {
+      const values = report[section];
+      if (!Array.isArray(values)) {
+        errors.push(`report.${section} \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C.`);
+        continue;
+      }
+      normalized[section] = values.map((item, index) => sectionItem(item, errors, `report.${section}[${index}]`));
+    }
+    if (!Array.isArray(report.links)) {
+      errors.push("report.links \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C.");
+    } else {
+      normalized.links = report.links.map((value, index) => {
+        if (!isRecord(value)) {
+          errors.push(`report.links[${index}] \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u043C.`);
+          return { url: "", annotation: "", source_post_urls: [] };
+        }
+        checkExtraFields(value, ["url", "annotation", "source_post_urls"], `report.links[${index}]`, errors);
+        return {
+          url: stringField(value, "url", errors, `report.links[${index}]`),
+          annotation: stringField(value, "annotation", errors, `report.links[${index}]`),
+          source_post_urls: stringArray(value.source_post_urls, errors, `report.links[${index}].source_post_urls`)
+        };
+      });
+    }
+    if (!Array.isArray(report.qa)) {
+      errors.push("report.qa \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043C\u0430\u0441\u0441\u0438\u0432\u043E\u043C.");
+    } else {
+      normalized.qa = report.qa.map((value, index) => qaItem(value, errors, `report.qa[${index}]`));
+    }
+    if (errors.length > 0) return { valid: false, value: null, errors };
+    return {
+      valid: true,
+      value: {
+        schema_version: "1.0",
+        report: normalized,
+        markdown_summary: input.markdown_summary
+      },
+      errors: []
+    };
+  }
+  function findJsonObject(raw) {
+    const start = raw.indexOf("{");
+    if (start < 0) return null;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let index = start; index < raw.length; index += 1) {
+      const char = raw[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+        continue;
+      }
+      if (char === '"') {
+        inString = true;
+        continue;
+      }
+      if (char === "{") depth += 1;
+      if (char === "}") {
+        depth -= 1;
+        if (depth === 0) return raw.slice(start, index + 1);
+      }
+    }
+    return null;
+  }
+  function markdownQa(raw) {
+    const entries = [];
+    const unrecognized = [];
+    const lines = raw.split(/\r?\n/);
+    let inQa = false;
+    let current = null;
+    const save = () => {
+      if (!current) return;
+      if (current.question && (current.short_answer || current.detailed_answer)) entries.push(current);
+      else if (current.question) unrecognized.push(current.question);
+      current = null;
+    };
+    for (const line of lines) {
+      const heading = line.match(/^#{2,6}\s+(.+)$/)?.[1]?.trim() || "";
+      if (heading) {
+        if (/q\s*&?\s*a|вопрос|ответы|частые вопросы/i.test(heading)) {
+          save();
+          inQa = true;
+          continue;
+        }
+        if (inQa && current) {
+          save();
+          current = { ...emptyQa(), question: heading };
+          continue;
+        }
+      }
+      if (!inQa) continue;
+      const question = line.match(/^(?:[-*]\s*)?(?:вопрос|question)\s*:\s*(.+)$/i)?.[1]?.trim();
+      const answer = line.match(/^(?:[-*]\s*)?(?:ответ|answer)\s*:\s*(.+)$/i)?.[1]?.trim();
+      if (question) {
+        save();
+        current = { ...emptyQa(), question };
+      } else if (answer) {
+        if (!current) {
+          unrecognized.push(answer);
+        } else {
+          current.short_answer = answer;
+          current.detailed_answer = answer;
+        }
+      } else if (current && line.trim() && !line.trim().startsWith("#")) {
+        current.detailed_answer = `${current.detailed_answer}${current.detailed_answer ? "\n" : ""}${line.trim()}`;
+      }
+    }
+    save();
+    if (inQa && entries.length === 0 && unrecognized.length === 0)
+      unrecognized.push("\u0420\u0430\u0437\u0434\u0435\u043B Q&A \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043F\u0430\u0440\u044B \xAB\u0412\u043E\u043F\u0440\u043E\u0441/\u041E\u0442\u0432\u0435\u0442\xBB \u043D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u044B.");
+    return { entries, unrecognized };
+  }
+  function fallbackPayload(raw, qa) {
+    return {
+      schema_version: "1.0",
+      report: {
+        title: "\u0418\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u0430\u044F Markdown-\u0441\u0432\u043E\u0434\u043A\u0430",
+        period: { from: null, to: null },
+        overview: raw.trim(),
+        important_news: [],
+        confirmed_decisions: [],
+        bugs_and_problems: [],
+        rumors: [],
+        links: [],
+        things_to_check: [],
+        qa,
+        conflicts: []
+      },
+      markdown_summary: raw.trim()
+    };
+  }
+  function importAiResponse(raw, sourceId, topicId) {
+    const text = raw.trim();
+    const warnings = [];
+    let payload = null;
+    let validJson = false;
+    const jsonText = findJsonObject(text);
+    if (jsonText) {
+      try {
+        const parsed = JSON.parse(jsonText);
+        const validation = validateAiResponse(parsed);
+        if (validation.valid && validation.value) {
+          payload = validation.value;
+          validJson = true;
+        } else {
+          warnings.push("JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043D\u0435 \u043F\u0440\u043E\u0448\u0451\u043B \u0441\u0442\u0440\u043E\u0433\u0443\u044E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443. \u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 \u043E\u0431\u044B\u0447\u043D\u0430\u044F Markdown-\u0441\u0432\u043E\u0434\u043A\u0430.");
+          warnings.push(...validation.errors.slice(0, 10));
+        }
+      } catch (error) {
+        warnings.push(`JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0451\u043D: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } else {
+      warnings.push("\u0412 \u043E\u0442\u0432\u0435\u0442\u0435 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D JSON-\u0431\u043B\u043E\u043A; \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D \u043A\u0430\u043A Markdown.");
+    }
+    const markdown = markdownQa(text);
+    if (!payload) payload = fallbackPayload(text, markdown.entries);
+    if (payload.report.qa.length === 0 && markdown.entries.length > 0 && !validJson) payload.report.qa = markdown.entries;
+    const reportId = makeId("report");
+    const qaEntries = payload.report.qa.map((entry) => ({ ...entry, related_report_id: reportId }));
+    const report = {
+      report_id: reportId,
+      source_id: sourceId || "manual-import",
+      topic_id: topicId || "unknown-topic",
+      period_from: payload.report.period.from,
+      period_to: payload.report.period.to,
+      raw_ai_response: raw,
+      parsed_summary: payload.report.overview || payload.markdown_summary,
+      structured_facts: payload.report,
+      qa_entries: qaEntries,
+      created_at: nowIso()
+    };
+    return {
+      report,
+      valid_json: validJson,
+      warnings,
+      unrecognized_qa: validJson ? [] : markdown.unrecognized
+    };
+  }
+
+  // src/core/types.ts
+  var DEFAULT_EXTENSION_SETTINGS = {
+    companionUrl: "http://127.0.0.1:8765",
+    adapterName: "auto",
+    maxPages: 50,
+    delayMs: 1200,
+    imageMode: "links",
+    imageKeywords: [],
+    downloadImages: false
+  };
+
+  // src/core/settings.ts
+  var SETTINGS_KEY = "fkb-settings";
+  function normalizeCompanionUrl(value) {
+    if (value === "") return "";
+    if (typeof value !== "string") return DEFAULT_EXTENSION_SETTINGS.companionUrl;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]", "::1"].includes(url.hostname)) {
+        return DEFAULT_EXTENSION_SETTINGS.companionUrl;
+      }
+      return url.href.replace(/\/$/, "");
+    } catch {
+      return DEFAULT_EXTENSION_SETTINGS.companionUrl;
+    }
+  }
+  function normalizeSettings(value) {
+    const adapterNames = ["auto", "4pda", "generic-forum", "generic-article", "manual-selection"];
+    return {
+      companionUrl: normalizeCompanionUrl(value?.companionUrl),
+      adapterName: adapterNames.includes(value?.adapterName) ? value?.adapterName : DEFAULT_EXTENSION_SETTINGS.adapterName,
+      maxPages: clampInteger(value?.maxPages, 1, 50, DEFAULT_EXTENSION_SETTINGS.maxPages),
+      delayMs: clampInteger(value?.delayMs, 0, 3e4, DEFAULT_EXTENSION_SETTINGS.delayMs),
+      imageMode: value?.imageMode === "all" || value?.imageMode === "keywords" || value?.imageMode === "manual" ? value.imageMode : "links",
+      imageKeywords: Array.isArray(value?.imageKeywords) ? value.imageKeywords.filter((item) => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [],
+      downloadImages: value?.downloadImages === true
+    };
+  }
+  async function getSettings() {
+    const stored = await chrome.storage.local.get(SETTINGS_KEY);
+    return normalizeSettings(stored[SETTINGS_KEY]);
+  }
+  async function saveSettings(settings) {
+    const normalized = normalizeSettings(settings);
+    await chrome.storage.local.set({ [SETTINGS_KEY]: normalized });
+    return normalized;
+  }
+
+  // src/background.ts
+  async function activeTab() {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (typeof tab?.id !== "number" || !tab.url)
+      throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C \u0430\u043A\u0442\u0438\u0432\u043D\u0443\u044E \u0432\u043A\u043B\u0430\u0434\u043A\u0443. \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0442\u0435\u043C\u0443 \u0444\u043E\u0440\u0443\u043C\u0430.");
+    if (!/^https?:\/\//i.test(tab.url)) throw new Error("\u0410\u043A\u0442\u0438\u0432\u043D\u0430\u044F \u0432\u043A\u043B\u0430\u0434\u043A\u0430 \u043D\u0435 \u044F\u0432\u043B\u044F\u0435\u0442\u0441\u044F \u043E\u0431\u044B\u0447\u043D\u043E\u0439 \u0432\u0435\u0431-\u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435\u0439.");
+    return tab;
+  }
+  function withSettings(source, settings) {
+    return {
+      ...source,
+      configuration: {
+        ...source.configuration,
+        maxPages: settings.maxPages,
+        delayMs: settings.delayMs,
+        imageMode: settings.imageMode,
+        imageKeywords: settings.imageKeywords,
+        downloadImages: settings.downloadImages
+      }
+    };
+  }
+  async function sourceForActiveUrl(url, title, adapterOverride = "auto") {
+    const detected = sourceForUrl(url, title || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F", adapterOverride);
+    const stored = await getSource(detected.source_id);
+    if (stored) return stored;
+    return detected;
+  }
+  async function injectAndCollect(tabId, options) {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["collector.js"] });
+    const result = await chrome.tabs.sendMessage(tabId, { type: "run-collector", options });
+    if (!result || typeof result !== "object") throw new Error("\u0410\u0434\u0430\u043F\u0442\u0435\u0440 \u043D\u0435 \u0432\u0435\u0440\u043D\u0443\u043B \u0440\u0435\u0437\u0443\u043B\u044C\u0442\u0430\u0442 \u0441\u0431\u043E\u0440\u0430.");
+    return result;
+  }
+  function updateCheckpoint(source, post) {
+    return {
+      ...source,
+      last_checkpoint_post_id: post.post_id || post.fingerprint,
+      last_checkpoint_url: post.canonical_post_url,
+      last_checkpoint_page_url: post.page_url,
+      last_checked_at: nowIso()
+    };
+  }
+  async function downloadImages(posts, source) {
+    if (!source.configuration.downloadImages) return { posts, warnings: [] };
+    const warnings = [];
+    const safeSource = source.source_id.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80);
+    let downloaded = 0;
+    const result = [];
+    for (const post of posts) {
+      const localPaths = [];
+      for (const [index, imageUrl] of post.image_urls.entries()) {
+        if (downloaded >= 100) {
+          warnings.push("\u0414\u043E\u0441\u0442\u0438\u0433\u043D\u0443\u0442 \u043B\u0438\u043C\u0438\u0442 100 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 \u0437\u0430 \u0437\u0430\u043F\u0443\u0441\u043A. \u041E\u0441\u0442\u0430\u043B\u044C\u043D\u044B\u0435 URL \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u044B \u0431\u0435\u0437 \u0441\u043A\u0430\u0447\u0438\u0432\u0430\u043D\u0438\u044F.");
+          break;
+        }
+        try {
+          const parsed = new URL(imageUrl);
+          if (!["http:", "https:"].includes(parsed.protocol)) continue;
+          const extension = (parsed.pathname.match(/\\.(avif|bmp|gif|jpe?g|png|webp)$/i)?.[1] || "img").toLowerCase();
+          const filename = `Forum Knowledge Base/images/${safeSource}/${post.fingerprint}-${index}.${extension}`;
+          await chrome.downloads.download({ url: imageUrl, filename, saveAs: false, conflictAction: "uniquify" });
+          localPaths.push(filename);
+          downloaded += 1;
+        } catch (error) {
+          warnings.push(
+            `\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0441\u043A\u0430\u0447\u0430\u0442\u044C \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0435 ${imageUrl}: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+      result.push({ ...post, local_image_paths: localPaths });
+    }
+    if (downloaded > 0) warnings.unshift(`\u0418\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439 \u043E\u0442\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u043E \u0432 \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430: ${downloaded}.`);
+    return { posts: result, warnings };
+  }
+  async function syncCompanion(path, body) {
+    const settings = await getSettings();
+    const base = settings.companionUrl.trim().replace(/\/$/, "");
+    if (!base) return null;
+    try {
+      const response = await fetch(`${base}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(5e3)
+      });
+      if (!response.ok) return `Companion \u043E\u0442\u0432\u0435\u0442\u0438\u043B HTTP ${response.status}.`;
+      return null;
+    } catch (error) {
+      return `Companion \u043D\u0435\u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+  async function makeState(url) {
+    const settings = await getSettings();
+    if (!/^https?:\/\//i.test(url)) {
+      return {
+        currentSource: null,
+        recentPosts: [],
+        recentPostCount: 0,
+        recentReports: [],
+        lastRunAt: null,
+        hasCheckpoint: false,
+        settings
+      };
+    }
+    const detected = sourceForUrl(url, "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F", settings.adapterName);
+    const currentSource = await getSource(detected.source_id);
+    const source = currentSource ? withSettings(currentSource, settings) : null;
+    const [storedPosts, recentReports, latestRun] = await Promise.all([
+      source ? getPosts(source.source_id) : Promise.resolve([]),
+      source ? getReports(source.source_id) : getReports(),
+      source ? getLatestRun(source.source_id) : Promise.resolve(null)
+    ]);
+    const posts = sortPostsChronologically(storedPosts);
+    return {
+      currentSource: source,
+      recentPosts: posts.slice(-8).reverse(),
+      recentPostCount: posts.length,
+      recentReports: recentReports.slice(0, 5),
+      lastRunAt: latestRun?.created_at || null,
+      hasCheckpoint: Boolean(source?.last_checkpoint_post_id || source?.last_checkpoint_url),
+      settings
+    };
+  }
+  async function collect(request) {
+    const tab = await activeTab();
+    const settings = await getSettings();
+    const existing = await sourceForActiveUrl(tab.url || request.url, tab.title, settings.adapterName);
+    const source = withSettings(existing, settings);
+    await putSource(source);
+    if (request.mode === "new" && !source.last_checkpoint_post_id && !source.last_checkpoint_url) {
+      return {
+        ok: false,
+        error: "Checkpoint \u0435\u0449\u0451 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u043D. \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \xAB\u0421\u043E\u0437\u0434\u0430\u0442\u044C checkpoint\xBB \u0438\u043B\u0438 \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u0443\u0439\u0442\u0435 \u0438\u0441\u0442\u043E\u0440\u0438\u044E."
+      };
+    }
+    const storedPosts = await getPosts(source.source_id);
+    const checkpointPost = source.last_checkpoint_post_id ? storedPosts.find((post) => (post.post_id || post.fingerprint) === source.last_checkpoint_post_id) : null;
+    const checkpointPageUrl = source.last_checkpoint_page_url || checkpointPost?.page_url || null;
+    const knownKeys = source.recent_known_ids.slice(-1e3);
+    const checkpointKey = source.last_checkpoint_post_id ? `${source.source_id}:${source.last_checkpoint_post_id}` : null;
+    const collectorOptions = {
+      mode: request.mode,
+      source,
+      maxPages: request.maxPages || source.configuration.maxPages,
+      delayMs: source.configuration.delayMs,
+      checkpointKey,
+      checkpointUrl: source.last_checkpoint_url,
+      checkpointPageUrl: checkpointPageUrl || null,
+      startPageUrl: checkpointPageUrl || source.last_checkpoint_page_url || source.last_checkpoint_url || null,
+      knownKeys
+    };
+    let result;
+    try {
+      result = await injectAndCollect(tab.id, collectorOptions);
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+        details: ["\u0423\u0431\u0435\u0434\u0438\u0442\u0435\u0441\u044C, \u0447\u0442\u043E \u0432\u043A\u043B\u0430\u0434\u043A\u0430 \u043E\u0442\u043A\u0440\u044B\u0442\u0430 \u043D\u0430 \u043E\u0431\u044B\u0447\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435 \u0438 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044E \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043D \u0434\u043E\u0441\u0442\u0443\u043F \u043A \u043D\u0435\u0439."]
+      };
+    }
+    if (request.mode === "checkpoint") {
+      const checkpoint = latestPost(result.posts);
+      if (checkpoint) {
+        const updated = updateCheckpoint(source, checkpoint);
+        updated.recent_known_ids = [postKey(checkpoint)];
+        await putSource(updated);
+        result.source = updated;
+        result.posts = [];
+        result.diagnostics.push(
+          `Checkpoint \u0441\u043E\u0437\u0434\u0430\u043D \u043D\u0430 \u043F\u043E\u0441\u0442\u0435 ${checkpoint.post_id || checkpoint.fingerprint}. \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043D\u0435 \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0430.`
+        );
+      }
+      return { ok: true, collection: result };
+    }
+    const canPersist = result.ok && (request.mode === "history" || result.checkpoint_found);
+    if (!canPersist) {
+      result.posts = [];
+      return { ok: true, collection: result };
+    }
+    const newPosts = unknownPosts(result.posts, storedPosts);
+    const imageResult = await downloadImages(newPosts, source);
+    const postsToSave = imageResult.posts;
+    result.diagnostics.push(...imageResult.warnings);
+    if (postsToSave.length > 0) await putPosts(postsToSave);
+    let updatedSource = source;
+    const checkpointCandidate = request.mode === "history" ? latestPost(result.posts) : latestPost(postsToSave);
+    if (checkpointCandidate) updatedSource = updateCheckpoint(updatedSource, checkpointCandidate);
+    updatedSource.recent_known_ids = mergeKnownKeys(updatedSource.recent_known_ids, result.posts, 1e3);
+    updatedSource.last_checked_at = nowIso();
+    await putSource(updatedSource);
+    const run = newRun(
+      updatedSource.source_id,
+      postsToSave.map((post) => postKey(post)),
+      postsToSave,
+      result.stop_reason
+    );
+    await putRun(run);
+    const companionWarning = await syncCompanion("/api/sync", {
+      source: updatedSource,
+      posts: postsToSave,
+      run
+    });
+    if (companionWarning) result.diagnostics.push(companionWarning);
+    result.source = updatedSource;
+    result.posts = postsToSave;
+    result.diagnostics.push(`\u041D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E: ${postsToSave.length}. \u041F\u043E\u0432\u0442\u043E\u0440\u0435\u043D\u0438\u044F \u043E\u0442\u0431\u0440\u043E\u0448\u0435\u043D\u044B.`);
+    return { ok: true, collection: result };
+  }
+  async function packet() {
+    const run = await getLatestRun();
+    if (!run || run.post_keys.length === 0) {
+      return {
+        ok: false,
+        error: "\u041D\u0435\u0442 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0435\u0433\u043E \u0441\u0431\u043E\u0440\u0430. \u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u043F\u043E\u043B\u043D\u0438\u0442\u0435 \u0441\u0431\u043E\u0440 \u043D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0438\u043B\u0438 \u0438\u043C\u043F\u043E\u0440\u0442 \u0438\u0441\u0442\u043E\u0440\u0438\u0438."
+      };
+    }
+    const posts = await getPosts(run.source_id);
+    const byKey = new Set(run.post_keys);
+    const selected = posts.filter((post) => byKey.has(postKey(post)));
+    if (selected.length === 0) return { ok: false, error: "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u043D\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439." };
+    const contextPosts = replyContextPosts(selected, posts);
+    const bundle = createAiPacketBundle(selected, contextPosts);
+    const packet2 = {
+      packet_id: bundle.packet_id,
+      part_count: bundle.part_count,
+      total_post_count: bundle.total_post_count,
+      combine_prompt_md: bundle.combine_prompt_md,
+      full_text: bundle.full_text,
+      chunks: bundle.chunks.map((chunk) => ({
+        packet_id: chunk.packet_id,
+        part_number: chunk.part_number,
+        part_count: chunk.part_count,
+        prompt_md: chunk.prompt_md,
+        posts_json: chunk.posts_json,
+        context_posts_json: chunk.context_posts_json,
+        links_json: chunk.links_json,
+        manifest_json: chunk.manifest_json,
+        post_count: chunk.posts.length,
+        context_count: chunk.context_posts.length
+      }))
+    };
+    return { ok: true, packet: packet2 };
+  }
+  async function resetActiveSource(url) {
+    if (!/^https?:\/\//i.test(url)) return { ok: false, error: "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B." };
+    const settings = await getSettings();
+    const detected = sourceForUrl(url, "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F", settings.adapterName);
+    const source = await getSource(detected.source_id);
+    if (!source) return { ok: false, error: "\u0414\u043B\u044F \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B \u043F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445." };
+    await resetSource(source.source_id);
+    const companionWarning = await syncCompanion("/api/reset", { source_id: source.source_id });
+    return {
+      ok: true,
+      message: companionWarning ? `\u0414\u0430\u043D\u043D\u044B\u0435 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u044B. ${companionWarning}` : "\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u043F\u043E\u0441\u0442\u044B \u0438 checkpoint \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B \u0443\u0434\u0430\u043B\u0435\u043D\u044B. \u041E\u0442\u0447\u0451\u0442\u044B \u0418\u0418 \u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u044B."
+    };
+  }
+  async function runDiagnostic(url) {
+    const tab = await activeTab();
+    const settings = await getSettings();
+    const pageUrl = tab.url || url;
+    const source = sourceForUrl(pageUrl, tab.title, settings.adapterName);
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["collector.js"] });
+    const result = await chrome.tabs.sendMessage(tab.id, {
+      type: "run-diagnostic",
+      adapterName: source.adapter_name
+    });
+    if (!result || typeof result !== "object" || !("markdown" in result) || !("json" in result)) {
+      throw new Error("\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u043B\u0443\u0447\u0438\u0442\u044C \u0434\u0438\u0430\u0433\u043D\u043E\u0441\u0442\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u043B\u043E\u0433 \u0441\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.");
+    }
+    return { ok: true, diagnostic: result };
+  }
+  async function cleanServicePosts(url) {
+    if (!/^https?:\/\//i.test(url)) return { ok: false, error: "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B." };
+    const settings = await getSettings();
+    const detected = sourceForUrl(url, "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F", settings.adapterName);
+    const source = await getSource(detected.source_id);
+    if (!source) return { ok: false, error: "\u0414\u043B\u044F \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B \u043F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445." };
+    const posts = await getPosts(source.source_id);
+    const badPosts = posts.filter(likelyServicePost);
+    const badKeys = badPosts.map((post) => postKey(post));
+    await deletePostsByKeys(badKeys);
+    if (badKeys.length > 0) {
+      source.recent_known_ids = source.recent_known_ids.filter((key) => !badKeys.includes(key));
+      await putSource(source);
+    }
+    const companionWarning = await syncCompanion("/api/clean", { source_id: source.source_id, post_keys: badKeys });
+    return {
+      ok: true,
+      message: companionWarning ? `\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0437\u0430\u043F\u0438\u0441\u0435\u0439 \u0432 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0438: ${badKeys.length}. ${companionWarning}` : `\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0437\u0430\u043F\u0438\u0441\u0435\u0439: ${badKeys.length}. \u0422\u043E\u0447\u043A\u0430 \u043E\u0442\u0441\u0447\u0451\u0442\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430.`
+    };
+  }
+  async function exportLocal() {
+    const [sources, posts, reports, runs] = await Promise.all([getAllSources(), getPosts(), getReports(), getRuns()]);
+    const payload = {
+      format: "forum-knowledge-base-export",
+      format_version: "1.0",
+      exported_at: nowIso(),
+      sources,
+      posts,
+      reports,
+      runs
+    };
+    const lines = ["# Forum Knowledge Base \u2014 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u044D\u043A\u0441\u043F\u043E\u0440\u0442", "", `\u0421\u043E\u0437\u0434\u0430\u043D\u043E: ${payload.exported_at}`, ""];
+    for (const source of sources) {
+      lines.push(`## ${source.title}`, `\u0418\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${source.topic_url}`, `\u0410\u0434\u0430\u043F\u0442\u0435\u0440: ${source.adapter_name}`, "");
+      const sourcePosts = sortPostsChronologically(posts.filter((post) => post.source_id === source.source_id));
+      for (const post of sourcePosts) {
+        lines.push(
+          `### ${post.author} \u2014 ${post.posted_at || "\u0434\u0430\u0442\u0430 \u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430"}`,
+          `[\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u043E\u0441\u0442](${post.canonical_post_url})`,
+          "",
+          post.body_text,
+          ""
+        );
+      }
+    }
+    if (reports.length) {
+      lines.push("## \u0418\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u043D\u044B\u0435 \u0441\u0432\u043E\u0434\u043A\u0438", "");
+      for (const report of reports) {
+        lines.push(
+          `### ${report.structured_facts.title || report.report_id}`,
+          `\u0414\u0430\u0442\u0430: ${report.created_at}`,
+          "",
+          report.parsed_summary,
+          ""
+        );
+      }
+    }
+    return {
+      ok: true,
+      exportData: { json: JSON.stringify(payload, null, 2), markdown: lines.join("\n") }
+    };
+  }
+  async function importResponse(request) {
+    let sourceId = request.sourceId || "";
+    let topicId = request.topicId || "";
+    if (!sourceId || !topicId) {
+      try {
+        const tab = await activeTab();
+        const settings = await getSettings();
+        const source = await sourceForActiveUrl(tab.url || "", tab.title, settings.adapterName);
+        sourceId ||= source.source_id;
+        topicId ||= parseTopicId(source.topic_url);
+      } catch {
+      }
+    }
+    const result = importAiResponse(request.raw, sourceId, topicId);
+    await putReport(result.report);
+    const companionWarning = await syncCompanion("/api/reports", { report: result.report });
+    if (companionWarning) result.warnings.push(companionWarning);
+    return { ok: true, importResult: result };
+  }
+  async function handle(request) {
+    switch (request.type) {
+      case "get-settings":
+        return { ok: true, settings: await getSettings() };
+      case "save-settings":
+        return { ok: true, settings: await saveSettings(request.settings) };
+      case "get-state":
+        return { ok: true, state: await makeState(request.url) };
+      case "collect":
+        return collect(request);
+      case "create-package":
+        return packet();
+      case "export-local":
+        return exportLocal();
+      case "reset-source":
+        return resetActiveSource(request.url);
+      case "clean-service-posts":
+        return cleanServicePosts(request.url);
+      case "run-diagnostic":
+        return runDiagnostic(request.url);
+      case "search-local":
+        return { ok: true, search: await searchLocal(request.query) };
+      case "import-ai":
+        return importResponse(request);
+      case "test-companion": {
+        const settings = await getSettings();
+        if (!settings.companionUrl) return { ok: false, error: "\u0410\u0434\u0440\u0435\u0441 companion \u043D\u0435 \u0437\u0430\u0434\u0430\u043D." };
+        try {
+          const response = await fetch(`${settings.companionUrl.replace(/\/$/, "")}/api/health`, {
+            signal: AbortSignal.timeout(5e3)
+          });
+          if (!response.ok) return { ok: false, error: `Companion \u0432\u0435\u0440\u043D\u0443\u043B HTTP ${response.status}.` };
+          return { ok: true, message: "Companion \u043E\u0442\u0432\u0435\u0447\u0430\u0435\u0442." };
+        } catch (error) {
+          return {
+            ok: false,
+            error: `\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0438\u0442\u044C\u0441\u044F: ${error instanceof Error ? error.message : String(error)}`
+          };
+        }
+      }
+      case "open-options":
+        await chrome.runtime.openOptionsPage();
+        return { ok: true, message: "\u041E\u0442\u043A\u0440\u044B\u0442\u044B \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438." };
+      default:
+        return { ok: false, error: "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u0430." };
+    }
+  }
+  chrome.runtime.onInstalled.addListener(() => {
+    void getSettings();
+  });
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    void handle(message).then((response) => sendResponse(response)).catch(
+      (error) => sendResponse({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    );
+    return true;
+  });
+})();

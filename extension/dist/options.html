@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Настройки — Forum Knowledge Base</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="settings-page">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Forum Knowledge Base</p>
+          <h1>Настройки</h1>
+        </div>
+      </header>
+      <section class="card">
+        <h2>Сбор страниц</h2>
+        <div class="form-grid">
+          <label
+            >Адаптер сайта
+            <select id="adapterName">
+              <option value="auto">Авто (4PDA или generic-forum)</option>
+              <option value="4pda">4PDA</option>
+              <option value="generic-forum">Generic forum</option>
+              <option value="generic-article">Generic article</option>
+              <option value="manual-selection">Manual selection (выделенный текст)</option>
+            </select>
+          </label>
+          <p class="hint form-hint">
+            Для нестандартного сайта можно выбрать generic-адаптер. В режиме Manual selection сначала выделите текст
+            сообщения на странице, затем откройте расширение.
+          </p>
+          <label
+            >Максимум страниц за запуск
+            <input id="maxPages" type="number" min="1" max="50" />
+          </label>
+          <label
+            >Пауза между страницами, мс
+            <input id="delayMs" type="number" min="0" max="30000" step="100" />
+          </label>
+        </div>
+        <label
+          >Режим изображений
+          <select id="imageMode">
+            <option value="links">Только текст и ссылки (рекомендуется)</option>
+            <option value="all">Текст, ссылки и все изображения</option>
+            <option value="keywords">Изображения рядом с ключевыми словами</option>
+            <option value="manual">Изображения выбранного сообщения</option>
+          </select>
+        </label>
+        <label
+          >Ключевые слова для режима «рядом с ключевыми словами»
+          <input id="imageKeywords" type="text" placeholder="камера, скриншот, ошибка" />
+        </label>
+        <label class="checkbox-label"
+          ><input id="downloadImages" type="checkbox" /> Сохранять доступные изображения локально
+          (экспериментально)</label
+        >
+        <p class="hint">
+          В MVP в постах сохраняются URL изображений. Внешние ссылки не открываются автоматически и не выполняются как
+          файлы. Для анализа приложите нужные картинки к запросу ИИ вручную.
+        </p>
+      </section>
+      <section class="card">
+        <h2>Необязательный companion-сервис</h2>
+        <label
+          >Адрес локального сервиса
+          <input id="companionUrl" type="url" placeholder="http://127.0.0.1:8765" />
+        </label>
+        <p class="hint">
+          Расширение продолжает работать без сервиса. Если адрес задан, новые посты и отчёты дополнительно отправляются
+          в локальную SQLite-базу. Принимаются только loopback-адреса localhost/127.0.0.1.
+        </p>
+        <div class="button-row">
+          <button id="testCompanion" class="secondary">Проверить соединение</button>
+          <button id="saveSettings" class="primary">Сохранить настройки</button>
+        </div>
+        <div id="settingsStatus" class="status neutral"></div>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

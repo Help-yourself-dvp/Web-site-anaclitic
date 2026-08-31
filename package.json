@@ -1,0 +1,17 @@
+{
+  "name": "forum-knowledge-base",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["extension"],
+  "description": "Локальное расширение для сбора сообщений форумов и ручного анализа через онлайн-ИИ",
+  "scripts": {
+    "build": "npm --prefix extension run build",
+    "typecheck": "npm --prefix extension run typecheck",
+    "lint": "npm --prefix extension run lint",
+    "format": "npm --prefix extension run format",
+    "format:check": "npm --prefix extension run format:check",
+    "test": "npm --prefix extension run test",
+    "test:python": "python -m unittest discover -s companion/tests -p 'test_*.py'",
+    "check": "npm run typecheck && npm run lint && npm test && npm run test:python"
+  }
+}

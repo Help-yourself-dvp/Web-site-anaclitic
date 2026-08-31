@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Forum Knowledge Base — локальная панель</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <div class="kicker">LOCAL / PERSONAL</div>
+        <h1>Forum Knowledge Base</h1>
+        <p>Посты форума → ручной анализ онлайн-ИИ → локальная база знаний</p>
+      </div>
+      <div id="health" class="health">проверяем сервис…</div>
+    </header>
+    <main>
+      <section class="stats" id="stats"></section>
+      <section class="panel search-panel">
+        <div class="panel-title"><h2>Поиск</h2><span>SQLite FTS5, если доступен</span></div>
+        <div class="search-row">
+          <input id="search" type="search" placeholder="слово, автор, проблема, вопрос…" />
+          <button id="searchButton">Найти</button>
+        </div>
+        <div id="searchResults" class="results"></div>
+      </section>
+      <div class="columns">
+        <section class="panel">
+          <div class="panel-title"><h2>Источники</h2><button class="text-button" id="refresh">Обновить</button></div>
+          <div id="sources" class="list"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-title"><h2>Последние сводки</h2><a href="/api/export/markdown">Экспорт Markdown</a></div>
+          <div id="reports" class="list"></div>
+        </section>
+      </div>
+      <section class="panel import-panel">
+        <div class="panel-title"><h2>Импорт ответа ИИ</h2><span>резервный вариант без расширения</span></div>
+        <div class="import-grid">
+          <textarea id="rawResponse" rows="8" placeholder="Вставьте полный ответ ИИ"></textarea>
+          <div>
+            <input id="importSource" placeholder="source_id (необязательно)" />
+            <input id="importTopic" placeholder="topic_id (необязательно)" />
+            <button id="importButton">Импортировать</button>
+            <div id="importStatus" class="small-status"></div>
+          </div>
+        </div>
+      </section>
+      <footer>
+        <a href="/api/export/json">Резервная копия JSON</a>
+        <span>Сервис локальный; внешние сайты и ИИ автоматически не вызываются.</span>
+      </footer>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

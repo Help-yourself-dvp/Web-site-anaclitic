@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Forum Knowledge Base</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="popup">
+    <main>
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">Личная база знаний</p>
+          <h1>Краткая выжимка форума</h1>
+        </div>
+        <button id="settingsButton" class="icon-button" title="Настройки" aria-label="Настройки">⚙</button>
+      </header>
+
+      <section class="card source-card">
+        <div class="section-heading">
+          <h2>1. Проверка страницы</h2>
+          <span id="adapterBadge" class="badge">проверяем…</span>
+        </div>
+        <p id="currentUrl" class="muted url-line">Откройте тему форума в этой вкладке.</p>
+        <p id="sourceInfo" class="source-info"></p>
+        <p id="automaticInfo" class="hint"></p>
+        <p id="mediaInfo" class="hint"></p>
+        <p class="hint">
+          Текст внутри раскрываемого блока берётся, если он уже есть в коде страницы; внешние ссылки и файлы
+          автоматически не открываются.
+        </p>
+        <button id="settingsTextButton" class="secondary">Настроить картинки и подключение</button>
+        <button id="cleanButton" class="secondary">Удалить только неправильные записи</button>
+        <button id="resetButton" class="danger-button">Удалить данные этой темы и начать заново</button>
+        <p class="hint">
+          «Удалить только неправильные записи» убирает очевидные пункты меню и сохраняет точку отсчёта. Кнопка ниже
+          удаляет все посты и точку отсчёта, но оставляет отчёты ИИ. CAPTCHA, вход и 403/429 не обходятся.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <h2>2. Собрать сообщения</h2>
+          <span id="checkpointBadge" class="badge neutral">точка отсчёта не создана</span>
+        </div>
+        <div class="control-row">
+          <label for="pagesInput">Сколько страниц проверить</label>
+          <input id="pagesInput" type="number" min="1" max="50" value="50" />
+        </div>
+        <div class="button-grid">
+          <button id="checkpointButton" class="secondary">Запомнить это место</button>
+          <button id="historyButton" class="secondary">Загрузить последние страницы</button>
+          <button id="collectButton" class="primary wide">Проверить новые сообщения</button>
+        </div>
+        <p class="hint">
+          «Запомнить это место» — безопасное начало без загрузки старой истории. В обычной проверке расширение само
+          найдёт последнюю страницу темы по сохранённой точке и пойдёт назад до неё.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <h2>3. Получить выжимку через ИИ</h2>
+          <span id="postCount" class="muted">нет данных</span>
+        </div>
+        <button id="packageButton" class="primary wide">Подготовить файлы для ИИ</button>
+        <button id="exportButton" class="secondary wide">Сохранить резервную копию</button>
+        <p class="hint">
+          В пакет также попадут ссылки, цитаты и найденные ссылки на сообщения, на которые отвечают новые посты. Старые
+          связанные посты из базы будут добавлены отдельно как контекст. Если текст слишком большой, он автоматически
+          разделится на несколько prompt-файлов; после них используйте скачанный combine-prompt.md для общей выжимки.
+        </p>
+        <div class="copy-row">
+          <button id="copyButton" class="secondary" disabled>Копировать prompt</button>
+          <span id="packageStatus" class="muted"></span>
+        </div>
+        <textarea
+          id="promptPreview"
+          class="code-preview"
+          rows="7"
+          readonly
+          placeholder="Здесь появится инструкция для ИИ после сбора сообщений"
+        ></textarea>
+      </section>
+
+      <details class="card collapsible">
+        <summary class="section-heading">
+          <h2>4. Найти сохранённое</h2>
+          <span class="badge neutral">только на этом компьютере</span>
+        </summary>
+        <p class="hint">
+          Введите любое слово и нажмите «Найти». Расширение ищет в тексте постов, сохранённых сводках и Q&A.
+        </p>
+        <div class="copy-row">
+          <input id="localSearch" type="search" placeholder="Например: камера, зарядка, ошибка…" />
+          <button id="localSearchButton" class="secondary">Найти</button>
+        </div>
+        <div id="localSearchResult" class="result"></div>
+      </details>
+
+      <details class="card collapsible">
+        <summary class="section-heading">
+          <h2>5. Вернуть ответ ИИ</h2>
+          <span class="badge neutral">JSON или Markdown</span>
+        </summary>
+        <input id="responseFile" type="file" accept=".md,.markdown,.json,.txt,text/markdown,application/json" />
+        <textarea id="aiResponse" rows="7" placeholder="Вставьте сюда полный ответ ИИ или выберите файл…"></textarea>
+        <button id="importButton" class="primary wide">Сохранить ответ в базу</button>
+        <div id="importResult" class="result"></div>
+      </details>
+
+      <details class="card collapsible">
+        <summary class="section-heading">
+          <h2>6. Диагностика ошибки</h2>
+          <span class="badge neutral">для разработчика</span>
+        </summary>
+        <p class="hint">
+          Если сбор остановился, нажмите кнопку. Расширение сохранит технический лог с URL, классами и примерами HTML.
+          Пришлите мне файл, если понадобится исправление.
+        </p>
+        <button id="diagnosticButton" class="secondary wide">Скачать лог диагностики</button>
+        <p id="diagnosticStatus" class="hint"></p>
+        <textarea
+          id="diagnosticPreview"
+          class="code-preview"
+          rows="5"
+          readonly
+          placeholder="После нажатия здесь будет начало лога"
+        ></textarea>
+      </details>
+
+      <details class="card collapsible">
+        <summary class="section-heading">
+          <h2>7. Сохранённые выжимки</h2>
+          <span class="badge neutral">ищите здесь</span>
+        </summary>
+        <div id="savedReports" class="saved-reports"></div>
+        <p id="storageInfo" class="hint"></p>
+        <p class="hint">
+          После импорта ответ ИИ не исчезает: его краткая версия и полный текст хранятся в расширении. При запущенном
+          companion их также видно в локальной веб-панели.
+        </p>
+      </details>
+
+      <section class="card compact">
+        <div class="section-heading">
+          <h2>Результат последнего действия</h2>
+          <button id="refreshButton" class="link-button">Обновить</button>
+        </div>
+        <div id="status" class="status neutral">Готово. Откройте тему и выберите действие.</div>
+        <p class="hint">
+          Это журнал только последнего запуска: здесь видны ошибки, страницы и число новых сообщений. Сохранённые данные
+          находятся в разделах 4 и 7.
+        </p>
+        <ul id="diagnostics" class="diagnostics"></ul>
+        <div id="recentPosts" class="recent-posts"></div>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

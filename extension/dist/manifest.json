@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Forum Knowledge Base",
+  "description": "Локальный сбор новых сообщений и подготовка материалов для ручного анализа ИИ.",
+  "version": "0.2.1",
+  "action": {
+    "default_title": "Forum Knowledge Base",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "downloads",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://4pda.to/*",
+    "https://*.4pda.to/*",
+    "http://4pda.to/*",
+    "http://*.4pda.to/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ]
+}
