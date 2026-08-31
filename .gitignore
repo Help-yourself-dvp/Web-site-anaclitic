@@ -1,0 +1,29 @@
+# JavaScript dependencies and generated extension build
+node_modules/
+extension/node_modules/
+# The built extension is committed so a non-developer can install it without Node.js.
+*.tsbuildinfo
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Local application data
+companion/data/
+*.sqlite3
+*.db
+.env
+
+# Diagnostic exports can contain logged-in page text and tokens; keep them outside Git.
+error's log/
+error log/
+
+# Editor/OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.forum-knowledge-base/schemas/ai-response.schema.json",
+  "title": "Forum Knowledge Base AI response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "report", "markdown_summary"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "period", "overview", "important_news", "confirmed_decisions", "bugs_and_problems", "rumors", "links", "things_to_check", "qa", "conflicts"],
+      "properties": {
+        "title": {"type": "string"},
+        "period": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {"from": {"type": ["string", "null"]}, "to": {"type": ["string", "null"]}}
+        },
+        "overview": {"type": "string"},
+        "important_news": {"$ref": "#/$defs/section"},
+        "confirmed_decisions": {"$ref": "#/$defs/section"},
+        "bugs_and_problems": {"$ref": "#/$defs/section"},
+        "rumors": {"$ref": "#/$defs/section"},
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url", "annotation", "source_post_urls"],
+            "properties": {"url": {"type": "string"}, "annotation": {"type": "string"}, "source_post_urls": {"type": "array", "items": {"type": "string"}}}
+          }
+        },
+        "things_to_check": {"type": "array", "items": {"type": "string"}},
+        "qa": {"type": "array", "items": {"$ref": "#/$defs/qa"}},
+        "conflicts": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "markdown_summary": {"type": "string"}
+  },
+  "$defs": {
+    "section": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "details", "status", "source_post_urls", "external_urls"],
+        "properties": {
+          "title": {"type": "string"},
+          "details": {"type": "string"},
+          "status": {"type": "string"},
+          "source_post_urls": {"type": "array", "items": {"type": "string"}},
+          "external_urls": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "short_answer", "detailed_answer", "status", "tags", "device_topic", "source_post_urls", "external_urls", "first_seen_at", "updated_at", "confidence_note"],
+      "properties": {
+        "question": {"type": "string"},
+        "short_answer": {"type": "string"},
+        "detailed_answer": {"type": "string"},
+        "status": {"enum": ["confirmed", "probable", "unconfirmed", "outdated", "conflicting"]},
+        "tags": {"type": "array", "items": {"type": "string"}},
+        "device_topic": {"type": "string"},
+        "source_post_urls": {"type": "array", "items": {"type": "string"}},
+        "external_urls": {"type": "array", "items": {"type": "string"}},
+        "first_seen_at": {"type": ["string", "null"]},
+        "updated_at": {"type": ["string", "null"]},
+        "confidence_note": {"type": "string"}
+      }
+    }
+  }
+}
