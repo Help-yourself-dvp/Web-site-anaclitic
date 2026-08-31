@@ -64,6 +64,12 @@ export function sourceForUrl(url: string, title = 'Без названия', ada
     last_checkpoint_url: null,
     last_checkpoint_page_url: null,
     recent_known_ids: [],
+    pending_scan_page_url: null,
+    pending_scan_checkpoint_key: null,
+    pending_scan_checkpoint_post_id: null,
+    pending_scan_checkpoint_url: null,
+    pending_scan_checkpoint_page_url: null,
+    pending_scan_post_keys: [],
     last_checked_at: null,
     configuration: {
       maxPages: 50,

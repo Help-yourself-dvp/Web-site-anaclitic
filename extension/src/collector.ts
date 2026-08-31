@@ -282,6 +282,7 @@ async function runCollector(options: CollectorOptions): Promise<CollectionResult
       posts: [],
       stop_reason: 'protection-detected',
       checkpoint_found: false,
+      resume_url: null,
       diagnostics,
       protection_message: initialProtection.message,
     };
@@ -293,14 +294,40 @@ async function runCollector(options: CollectorOptions): Promise<CollectionResult
   let checkpointFound = options.mode !== 'new';
   let stopReason: CollectionResult['stop_reason'] = options.mode === 'history' ? 'history-limit' : 'no-previous-page';
   let protectionMessage: string | null = null;
+  let resumeUrl: string | null = null;
   let setupFailed = false;
   const checkpointPageUrl = options.checkpointPageUrl ? normalizeUrl(options.checkpointPageUrl, location.href) : null;
+
+  if (options.mode === 'new' && options.resumePageUrl) {
+    try {
+      const resumePageUrl = normalizeUrl(options.resumePageUrl, location.href);
+      if (resumePageUrl) {
+        const resumed = await fetchDocument(resumePageUrl);
+        if (resumed.protection.protected) {
+          setupFailed = true;
+          protectionMessage = resumed.protection.message;
+          stopReason = 'protection-detected';
+        } else {
+          currentDocument = resumed.document;
+          currentUrl = resumed.url;
+          diagnostics.push('Продолжаю предыдущий неполный проход с сохранённой страницы.');
+        }
+      }
+    } catch (error) {
+      setupFailed = true;
+      stopReason = 'error';
+      diagnostics.push(
+        `Не удалось продолжить с сохранённой страницы: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 
   // A topic's last page changes as new replies arrive. For a new-message run
   // we reopen the saved checkpoint page; for history import we use the page the
   // user opened as a starting point. In both cases the "last page" link lets us
   // find page 700 without making the user calculate its number manually.
-  const shouldFindLatest = options.mode === 'history' || (options.mode === 'new' && options.startPageUrl);
+  const shouldFindLatest =
+    !options.resumePageUrl && (options.mode === 'history' || (options.mode === 'new' && options.startPageUrl));
   if (shouldFindLatest) {
     try {
       if (options.mode === 'new' && options.startPageUrl) {
@@ -428,6 +455,9 @@ async function runCollector(options: CollectorOptions): Promise<CollectionResult
     diagnostics.push(
       'Checkpoint не найден в пределах лимита страниц. Новые посты не будут зафиксированы как проверенные.',
     );
+    const lastPage = pages.at(-1);
+    resumeUrl = lastPage ? normalizeUrl(lastPage.previous_url || '', lastPage.url) : null;
+    if (resumeUrl) diagnostics.push('Следующий запуск продолжит с более старой страницы автоматически.');
     stopReason = 'checkpoint-not-found';
   }
 
@@ -440,6 +470,7 @@ async function runCollector(options: CollectorOptions): Promise<CollectionResult
     posts,
     stop_reason: stopReason,
     checkpoint_found: checkpointFound,
+    resume_url: resumeUrl,
     diagnostics,
     protection_message: protectionMessage,
   };
@@ -469,6 +500,7 @@ if (!collectorWindow[loadedFlag]) {
           posts: [],
           stop_reason: 'error',
           checkpoint_found: false,
+          resume_url: null,
           diagnostics: [error instanceof Error ? error.message : String(error)],
           protection_message: null,
         });

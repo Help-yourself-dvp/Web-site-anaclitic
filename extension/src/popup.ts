@@ -64,9 +64,11 @@ function renderState(state: ExtensionState): void {
     adapterBadge.textContent = state.currentSource.adapter_name;
     adapterBadge.className = 'badge';
     sourceInfo.textContent = `${state.currentSource.title} · сохранено постов: ${state.recentPostCount}`;
-    automaticInfo.textContent = state.hasCheckpoint
-      ? 'В следующий раз расширение само найдёт последнюю страницу этой темы. Открыть именно старую страницу вручную не понадобится.'
-      : 'Сначала запомните место или загрузите несколько последних страниц.';
+    automaticInfo.textContent = state.currentSource.pending_scan_page_url
+      ? 'Предыдущая проверка не дошла до старой точки. Следующая проверка продолжит этот диапазон сама.'
+      : state.hasCheckpoint
+        ? 'В следующий раз расширение само найдёт последнюю страницу этой темы. Открыть именно старую страницу вручную не понадобится.'
+        : 'Сначала запомните место или загрузите несколько последних страниц.';
     mediaInfo.textContent = imageModeLabels[state.settings.imageMode];
     checkpointBadge.textContent = state.hasCheckpoint ? 'точка отсчёта сохранена' : 'точка отсчёта не создана';
     checkpointBadge.className = `badge ${state.hasCheckpoint ? '' : 'neutral'}`;
@@ -191,9 +193,14 @@ function renderCollection(result: CollectionResult): void {
     setStatus('Сбор остановлен: разметка не распознана или произошла ошибка.', 'error');
   } else if (result.mode === 'checkpoint') {
     setStatus('Checkpoint создан. Старые сообщения не импортированы.', 'success');
+  } else if (result.stop_reason === 'checkpoint-not-found' && result.resume_url && result.posts.length > 0) {
+    setStatus(
+      `Сохранена только часть диапазона: ${result.posts.length} новых сообщений. Нажмите «Проверить новые сообщения» ещё раз — продолжение начнётся автоматически.`,
+      'warning',
+    );
   } else if (result.stop_reason === 'checkpoint-not-found') {
     setStatus(
-      'Checkpoint не найден в лимите страниц. Ничего не зафиксировано — увеличьте лимит или проверьте страницу.',
+      'Точка отсчёта не найдена в заданном лимите страниц. Расширение ничего не отметило как проверенное.',
       'warning',
     );
   } else {

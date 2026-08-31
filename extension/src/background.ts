@@ -186,6 +186,8 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
     ? storedPosts.find((post) => (post.post_id || post.fingerprint) === source.last_checkpoint_post_id)
     : null;
   const checkpointPageUrl = source.last_checkpoint_page_url || checkpointPost?.page_url || null;
+  const resumePageUrl = source.pending_scan_page_url || null;
+  const pendingPostKeys = source.pending_scan_post_keys || [];
   const knownKeys = source.recent_known_ids.slice(-1000);
   const checkpointKey = source.last_checkpoint_post_id ? `${source.source_id}:${source.last_checkpoint_post_id}` : null;
   const collectorOptions: CollectorRequest['options'] = {
@@ -196,7 +198,8 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
     checkpointKey,
     checkpointUrl: source.last_checkpoint_url,
     checkpointPageUrl: checkpointPageUrl || null,
-    startPageUrl: checkpointPageUrl || source.last_checkpoint_page_url || source.last_checkpoint_url || null,
+    startPageUrl: resumePageUrl || checkpointPageUrl || source.last_checkpoint_url || null,
+    resumePageUrl,
     knownKeys,
   };
 
@@ -215,6 +218,12 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
     const checkpoint = latestPost(result.posts);
     if (checkpoint) {
       const updated = updateCheckpoint(source, checkpoint);
+      updated.pending_scan_page_url = null;
+      updated.pending_scan_checkpoint_key = null;
+      updated.pending_scan_checkpoint_post_id = null;
+      updated.pending_scan_checkpoint_url = null;
+      updated.pending_scan_checkpoint_page_url = null;
+      updated.pending_scan_post_keys = [];
       updated.recent_known_ids = [postKey(checkpoint)];
       await putSource(updated);
       result.source = updated;
@@ -226,7 +235,8 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
     return { ok: true, collection: result };
   }
 
-  const canPersist = result.ok && (request.mode === 'history' || result.checkpoint_found);
+  const partialNewRun = request.mode === 'new' && !result.checkpoint_found && Boolean(result.resume_url);
+  const canPersist = result.ok && (request.mode === 'history' || result.checkpoint_found || partialNewRun);
   if (!canPersist) {
     result.posts = [];
     return { ok: true, collection: result };
@@ -239,18 +249,50 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
   if (postsToSave.length > 0) await putPosts(postsToSave);
 
   let updatedSource = source;
-  const checkpointCandidate = request.mode === 'history' ? latestPost(result.posts) : latestPost(postsToSave);
-  if (checkpointCandidate) updatedSource = updateCheckpoint(updatedSource, checkpointCandidate);
+  const segmentKeys = postsToSave.map((post) => postKey(post));
+  if (partialNewRun) {
+    updatedSource.pending_scan_page_url = result.resume_url;
+    updatedSource.pending_scan_post_keys = Array.from(new Set([...pendingPostKeys, ...segmentKeys]));
+    if (!updatedSource.pending_scan_checkpoint_key) {
+      const segmentNewest = latestPost(postsToSave);
+      if (segmentNewest) {
+        updatedSource.pending_scan_checkpoint_key = postKey(segmentNewest);
+        updatedSource.pending_scan_checkpoint_post_id = segmentNewest.post_id || segmentNewest.fingerprint;
+        updatedSource.pending_scan_checkpoint_url = segmentNewest.canonical_post_url;
+        updatedSource.pending_scan_checkpoint_page_url = segmentNewest.page_url;
+      }
+    }
+    result.diagnostics.push('Этот запуск обработал только часть диапазона. Следующий запуск продолжит автоматически.');
+  } else if (request.mode === 'new') {
+    const pendingKey = source.pending_scan_checkpoint_key;
+    const allKnownAfterSave = [...storedPosts, ...postsToSave];
+    const pendingCandidate = pendingKey ? allKnownAfterSave.find((post) => postKey(post) === pendingKey) || null : null;
+    const checkpointCandidate = pendingCandidate || latestPost(postsToSave);
+    if (checkpointCandidate) updatedSource = updateCheckpoint(updatedSource, checkpointCandidate);
+    updatedSource.pending_scan_page_url = null;
+    updatedSource.pending_scan_checkpoint_key = null;
+    updatedSource.pending_scan_checkpoint_post_id = null;
+    updatedSource.pending_scan_checkpoint_url = null;
+    updatedSource.pending_scan_checkpoint_page_url = null;
+    updatedSource.pending_scan_post_keys = [];
+  } else {
+    const checkpointCandidate = latestPost(result.posts);
+    if (checkpointCandidate) updatedSource = updateCheckpoint(updatedSource, checkpointCandidate);
+    updatedSource.pending_scan_page_url = null;
+    updatedSource.pending_scan_checkpoint_key = null;
+    updatedSource.pending_scan_checkpoint_post_id = null;
+    updatedSource.pending_scan_checkpoint_url = null;
+    updatedSource.pending_scan_checkpoint_page_url = null;
+    updatedSource.pending_scan_post_keys = [];
+  }
   updatedSource.recent_known_ids = mergeKnownKeys(updatedSource.recent_known_ids, result.posts, 1000);
   updatedSource.last_checked_at = nowIso();
   await putSource(updatedSource);
 
-  const run = newRun(
-    updatedSource.source_id,
-    postsToSave.map((post) => postKey(post)),
-    postsToSave,
-    result.stop_reason,
-  );
+  const runKeys = partialNewRun ? segmentKeys : [...pendingPostKeys, ...segmentKeys];
+  const allKnownAfterSave = [...storedPosts, ...postsToSave];
+  const runPosts = allKnownAfterSave.filter((post) => runKeys.includes(postKey(post)));
+  const run = newRun(updatedSource.source_id, Array.from(new Set(runKeys)), runPosts, result.stop_reason);
   await putRun(run);
   const companionWarning = await syncCompanion('/api/sync', {
     source: updatedSource,

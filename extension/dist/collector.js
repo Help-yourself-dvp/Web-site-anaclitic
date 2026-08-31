@@ -835,6 +835,7 @@ ${html.slice(0, 12e4).toLocaleLowerCase()}`;
         posts: [],
         stop_reason: "protection-detected",
         checkpoint_found: false,
+        resume_url: null,
         diagnostics,
         protection_message: initialProtection.message
       };
@@ -845,9 +846,33 @@ ${html.slice(0, 12e4).toLocaleLowerCase()}`;
     let checkpointFound = options.mode !== "new";
     let stopReason = options.mode === "history" ? "history-limit" : "no-previous-page";
     let protectionMessage = null;
+    let resumeUrl = null;
     let setupFailed = false;
     const checkpointPageUrl = options.checkpointPageUrl ? normalizeUrl(options.checkpointPageUrl, location.href) : null;
-    const shouldFindLatest = options.mode === "history" || options.mode === "new" && options.startPageUrl;
+    if (options.mode === "new" && options.resumePageUrl) {
+      try {
+        const resumePageUrl = normalizeUrl(options.resumePageUrl, location.href);
+        if (resumePageUrl) {
+          const resumed = await fetchDocument(resumePageUrl);
+          if (resumed.protection.protected) {
+            setupFailed = true;
+            protectionMessage = resumed.protection.message;
+            stopReason = "protection-detected";
+          } else {
+            currentDocument = resumed.document;
+            currentUrl = resumed.url;
+            diagnostics.push("\u041F\u0440\u043E\u0434\u043E\u043B\u0436\u0430\u044E \u043F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0438\u0439 \u043D\u0435\u043F\u043E\u043B\u043D\u044B\u0439 \u043F\u0440\u043E\u0445\u043E\u0434 \u0441 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.");
+          }
+        }
+      } catch (error) {
+        setupFailed = true;
+        stopReason = "error";
+        diagnostics.push(
+          `\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442\u044C \u0441 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+    const shouldFindLatest = !options.resumePageUrl && (options.mode === "history" || options.mode === "new" && options.startPageUrl);
     if (shouldFindLatest) {
       try {
         if (options.mode === "new" && options.startPageUrl) {
@@ -965,6 +990,9 @@ ${html.slice(0, 12e4).toLocaleLowerCase()}`;
       diagnostics.push(
         "Checkpoint \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D \u0432 \u043F\u0440\u0435\u0434\u0435\u043B\u0430\u0445 \u043B\u0438\u043C\u0438\u0442\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446. \u041D\u043E\u0432\u044B\u0435 \u043F\u043E\u0441\u0442\u044B \u043D\u0435 \u0431\u0443\u0434\u0443\u0442 \u0437\u0430\u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u043D\u044B \u043A\u0430\u043A \u043F\u0440\u043E\u0432\u0435\u0440\u0435\u043D\u043D\u044B\u0435."
       );
+      const lastPage = pages.at(-1);
+      resumeUrl = lastPage ? normalizeUrl(lastPage.previous_url || "", lastPage.url) : null;
+      if (resumeUrl) diagnostics.push("\u0421\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442 \u0441 \u0431\u043E\u043B\u0435\u0435 \u0441\u0442\u0430\u0440\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438.");
       stopReason = "checkpoint-not-found";
     }
     const posts = deduplicatePosts(pages.flatMap((page) => page.posts));
@@ -976,6 +1004,7 @@ ${html.slice(0, 12e4).toLocaleLowerCase()}`;
       posts,
       stop_reason: stopReason,
       checkpoint_found: checkpointFound,
+      resume_url: resumeUrl,
       diagnostics,
       protection_message: protectionMessage
     };
@@ -1000,6 +1029,7 @@ ${html.slice(0, 12e4).toLocaleLowerCase()}`;
           posts: [],
           stop_reason: "error",
           checkpoint_found: false,
+          resume_url: null,
           diagnostics: [error instanceof Error ? error.message : String(error)],
           protection_message: null
         });

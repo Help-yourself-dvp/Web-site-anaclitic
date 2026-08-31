@@ -30,6 +30,12 @@ export interface SourceRecord {
   last_checkpoint_url: string | null;
   last_checkpoint_page_url: string | null;
   recent_known_ids: string[];
+  pending_scan_page_url: string | null;
+  pending_scan_checkpoint_key: string | null;
+  pending_scan_checkpoint_post_id: string | null;
+  pending_scan_checkpoint_url: string | null;
+  pending_scan_checkpoint_page_url: string | null;
+  pending_scan_post_keys: string[];
   last_checked_at: string | null;
   configuration: SourceConfiguration;
   enabled: boolean;
@@ -91,6 +97,7 @@ export interface CollectionResult {
   posts: ForumPost[];
   stop_reason: CollectionStopReason;
   checkpoint_found: boolean;
+  resume_url: string | null;
   diagnostics: string[];
   protection_message: string | null;
 }

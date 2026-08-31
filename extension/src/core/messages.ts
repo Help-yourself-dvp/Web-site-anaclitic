@@ -76,6 +76,7 @@ export interface CollectorOptions {
   checkpointUrl: string | null;
   checkpointPageUrl: string | null;
   startPageUrl: string | null;
+  resumePageUrl: string | null;
   knownKeys: string[];
 }
 
