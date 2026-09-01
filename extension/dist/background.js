@@ -1735,7 +1735,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
 
   // src/core/types.ts
   var DEFAULT_EXTENSION_SETTINGS = {
-    companionUrl: "http://127.0.0.1:8765",
+    companionUrl: "",
     adapterName: "auto",
     backgroundCheckEnabled: false,
     maxPages: 50,
@@ -2144,7 +2144,13 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     return { ok: true, message: "\u041E\u0442\u043A\u0440\u044B\u0432\u0430\u044E \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u0443\u044E \u0442\u0435\u043C\u0443." };
   }
   async function exportLocal() {
-    const [sources, posts, reports, runs] = await Promise.all([getAllSources(), getPosts(), getReports(), getRuns()]);
+    const [sources, posts, reports, qa, runs] = await Promise.all([
+      getAllSources(),
+      getPosts(),
+      getReports(),
+      getQa(),
+      getRuns()
+    ]);
     const payload = {
       format: "forum-knowledge-base-export",
       format_version: "1.0",
@@ -2153,6 +2159,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       sources,
       posts,
       reports,
+      qa,
       runs
     };
     const lines = ["# Forum Knowledge Base \u2014 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u044B\u0439 \u044D\u043A\u0441\u043F\u043E\u0440\u0442", "", `\u0421\u043E\u0437\u0434\u0430\u043D\u043E: ${payload.exported_at}`, ""];
@@ -2177,6 +2184,18 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
           `\u0414\u0430\u0442\u0430: ${report.created_at}`,
           "",
           report.parsed_summary,
+          ""
+        );
+      }
+    }
+    if (qa.length) {
+      lines.push("## Q&A", "");
+      for (const entry of qa) {
+        lines.push(
+          `### ${entry.question}`,
+          `\u0421\u0442\u0430\u0442\u0443\u0441: ${entry.status}`,
+          "",
+          entry.detailed_answer || entry.short_answer,
           ""
         );
       }

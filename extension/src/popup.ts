@@ -29,7 +29,7 @@ const versionInfo = $('#versionInfo');
 const pagesInput = $('#pagesInput') as HTMLInputElement;
 const promptPreview = $('#promptPreview') as HTMLTextAreaElement;
 const packageStatus = $('#packageStatus');
-const singleFormat = $('#singleFormat') as HTMLSelectElement;
+const formatCheckboxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="singleFormat"]'));
 const splitPackageButton = $('#splitPackageButton') as HTMLButtonElement;
 const copyButton = $('#copyButton') as HTMLButtonElement;
 const aiResponse = $('#aiResponse') as HTMLTextAreaElement;
@@ -333,18 +333,26 @@ async function createPackage(mode: 'single' | 'split'): Promise<void> {
         setStatus('Расширение вернуло неожиданный ответ.', 'error');
         return;
       }
+      const selectedFormats = formatCheckboxes
+        .filter((checkbox) => checkbox.checked)
+        .map((checkbox) => checkbox.value as 'md' | 'json' | 'txt');
+      if (selectedFormats.length === 0) {
+        setStatus('Выберите хотя бы один формат файла.', 'warning');
+        return;
+      }
       const packet = response.singlePacket;
-      const format = singleFormat.value;
-      const file: [string, string, string] =
-        format === 'json'
-          ? ['ai-full.json', packet.json, 'application/json;charset=utf-8']
-          : format === 'txt'
-            ? ['ai-full.txt', packet.text, 'text/plain;charset=utf-8']
-            : ['ai-full.md', packet.markdown, 'text/markdown;charset=utf-8'];
+      const files: Record<'md' | 'json' | 'txt', [string, string, string]> = {
+        md: ['ai-full.md', packet.markdown, 'text/markdown;charset=utf-8'],
+        json: ['ai-full.json', packet.json, 'application/json;charset=utf-8'],
+        txt: ['ai-full.txt', packet.text, 'text/plain;charset=utf-8'],
+      };
       promptPreview.value = packet.markdown;
       copyButton.textContent = 'Копировать весь prompt';
-      packageStatus.textContent = `Один файл готов: ${packet.post_count} новых постов и ${packet.context_count} связанных старых.`;
-      downloadText(file[0], file[1], file[2]);
+      packageStatus.textContent = `${selectedFormats.length} единый файл(а) готовы: ${packet.post_count} новых постов и ${packet.context_count} связанных старых.`;
+      for (const format of selectedFormats) {
+        const file = files[format];
+        downloadText(file[0], file[1], file[2]);
+      }
       setStatus('Единый файл готов. В нём уже есть промпт и инструкция по формату ответа.', 'success');
       return;
     }

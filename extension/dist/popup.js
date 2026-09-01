@@ -748,7 +748,7 @@
   var pagesInput = $("#pagesInput");
   var promptPreview = $("#promptPreview");
   var packageStatus = $("#packageStatus");
-  var singleFormat = $("#singleFormat");
+  var formatCheckboxes = Array.from(document.querySelectorAll('input[name="singleFormat"]'));
   var splitPackageButton = $("#splitPackageButton");
   var copyButton = $("#copyButton");
   var aiResponse = $("#aiResponse");
@@ -1020,13 +1020,24 @@
           setStatus("\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u0432\u0435\u0440\u043D\u0443\u043B\u043E \u043D\u0435\u043E\u0436\u0438\u0434\u0430\u043D\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.", "error");
           return;
         }
+        const selectedFormats = formatCheckboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value);
+        if (selectedFormats.length === 0) {
+          setStatus("\u0412\u044B\u0431\u0435\u0440\u0438\u0442\u0435 \u0445\u043E\u0442\u044F \u0431\u044B \u043E\u0434\u0438\u043D \u0444\u043E\u0440\u043C\u0430\u0442 \u0444\u0430\u0439\u043B\u0430.", "warning");
+          return;
+        }
         const packet = response.singlePacket;
-        const format = singleFormat.value;
-        const file = format === "json" ? ["ai-full.json", packet.json, "application/json;charset=utf-8"] : format === "txt" ? ["ai-full.txt", packet.text, "text/plain;charset=utf-8"] : ["ai-full.md", packet.markdown, "text/markdown;charset=utf-8"];
+        const files2 = {
+          md: ["ai-full.md", packet.markdown, "text/markdown;charset=utf-8"],
+          json: ["ai-full.json", packet.json, "application/json;charset=utf-8"],
+          txt: ["ai-full.txt", packet.text, "text/plain;charset=utf-8"]
+        };
         promptPreview.value = packet.markdown;
         copyButton.textContent = "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u0435\u0441\u044C prompt";
-        packageStatus.textContent = `\u041E\u0434\u0438\u043D \u0444\u0430\u0439\u043B \u0433\u043E\u0442\u043E\u0432: ${packet.post_count} \u043D\u043E\u0432\u044B\u0445 \u043F\u043E\u0441\u0442\u043E\u0432 \u0438 ${packet.context_count} \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0445 \u0441\u0442\u0430\u0440\u044B\u0445.`;
-        downloadText(file[0], file[1], file[2]);
+        packageStatus.textContent = `${selectedFormats.length} \u0435\u0434\u0438\u043D\u044B\u0439 \u0444\u0430\u0439\u043B(\u0430) \u0433\u043E\u0442\u043E\u0432\u044B: ${packet.post_count} \u043D\u043E\u0432\u044B\u0445 \u043F\u043E\u0441\u0442\u043E\u0432 \u0438 ${packet.context_count} \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0445 \u0441\u0442\u0430\u0440\u044B\u0445.`;
+        for (const format of selectedFormats) {
+          const file = files2[format];
+          downloadText(file[0], file[1], file[2]);
+        }
         setStatus("\u0415\u0434\u0438\u043D\u044B\u0439 \u0444\u0430\u0439\u043B \u0433\u043E\u0442\u043E\u0432. \u0412 \u043D\u0451\u043C \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u043F\u0440\u043E\u043C\u043F\u0442 \u0438 \u0438\u043D\u0441\u0442\u0440\u0443\u043A\u0446\u0438\u044F \u043F\u043E \u0444\u043E\u0440\u043C\u0430\u0442\u0443 \u043E\u0442\u0432\u0435\u0442\u0430.", "success");
         return;
       }

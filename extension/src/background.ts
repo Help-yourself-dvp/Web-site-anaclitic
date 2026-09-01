@@ -6,6 +6,7 @@ import {
   deletePostsByKeys,
   getPosts,
   getReports,
+  getQa,
   getRuns,
   getSource,
   newRun,
@@ -425,7 +426,13 @@ async function openSavedSource(sourceId: string): Promise<BackgroundResponse> {
 }
 
 async function exportLocal(): Promise<BackgroundResponse> {
-  const [sources, posts, reports, runs] = await Promise.all([getAllSources(), getPosts(), getReports(), getRuns()]);
+  const [sources, posts, reports, qa, runs] = await Promise.all([
+    getAllSources(),
+    getPosts(),
+    getReports(),
+    getQa(),
+    getRuns(),
+  ]);
   const payload = {
     format: 'forum-knowledge-base-export',
     format_version: '1.0',
@@ -434,6 +441,7 @@ async function exportLocal(): Promise<BackgroundResponse> {
     sources,
     posts,
     reports,
+    qa,
     runs,
   };
   const lines = ['# Forum Knowledge Base — локальный экспорт', '', `Создано: ${payload.exported_at}`, ''];
@@ -458,6 +466,18 @@ async function exportLocal(): Promise<BackgroundResponse> {
         `Дата: ${report.created_at}`,
         '',
         report.parsed_summary,
+        '',
+      );
+    }
+  }
+  if (qa.length) {
+    lines.push('## Q&A', '');
+    for (const entry of qa) {
+      lines.push(
+        `### ${entry.question}`,
+        `Статус: ${entry.status}`,
+        '',
+        entry.detailed_answer || entry.short_answer,
         '',
       );
     }

@@ -71,19 +71,26 @@
           <span id="postCount" class="muted">нет данных</span>
         </div>
         <div class="control-row ai-file-row">
-          <label for="singleFormat">Формат одного файла</label>
-          <select id="singleFormat">
-            <option value="md">Markdown (.md) — рекомендуется</option>
-            <option value="json">JSON (.json) — с данными и промптом</option>
-            <option value="txt">Обычный текст (.txt)</option>
-          </select>
+          <span class="format-label">Форматы одного файла</span>
+          <div class="format-options">
+            <label class="checkbox-label"
+              ><input type="checkbox" name="singleFormat" value="md" checked /> Markdown (.md)</label
+            >
+            <label class="checkbox-label"
+              ><input type="checkbox" name="singleFormat" value="json" /> JSON (.json)</label
+            >
+            <label class="checkbox-label"
+              ><input type="checkbox" name="singleFormat" value="txt" /> Обычный текст (.txt)</label
+            >
+          </div>
         </div>
         <button id="packageButton" class="primary wide">Скачать одним файлом для ИИ</button>
         <button id="splitPackageButton" class="secondary wide">Скачать с разбивкой на части</button>
-        <button id="exportButton" class="secondary wide">Сохранить резервную копию данных (не для ИИ)</button>
+        <button id="exportButton" class="secondary wide">Скачать всю базу для редактора</button>
         <p class="hint">
           Единый файл содержит сразу инструкции для ИИ и все сообщения. Режим с разбивкой нужен только для очень
-          большого объёма, когда ИИ не принимает всё целиком.
+          большого объёма, когда ИИ не принимает всё целиком. Кнопка «Скачать всю базу» сохраняет отдельные JSON и
+          Markdown для редактора и резервной копии — без AI-промпта.
         </p>
         <div class="copy-row">
           <button id="copyButton" class="secondary" disabled>Копировать prompt</button>

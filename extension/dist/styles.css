@@ -196,11 +196,19 @@ details.collapsible[open] > summary::after {
   align-items: center;
   margin-top: 12px;
 }
-.ai-file-row label {
-  margin: 0;
+.ai-file-row .format-label {
+  color: #3b485e;
+  font-size: 12px;
+  font-weight: 600;
 }
-.ai-file-row select {
+.format-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+}
+.format-options .checkbox-label {
   margin: 0;
+  font-weight: 500;
 }
 .button-grid {
   display: grid;

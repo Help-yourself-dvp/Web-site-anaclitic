@@ -238,7 +238,7 @@ export interface ExtensionSettings {
 }
 
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
-  companionUrl: 'http://127.0.0.1:8765',
+  companionUrl: '',
   adapterName: 'auto',
   backgroundCheckEnabled: false,
   maxPages: 50,
