@@ -504,7 +504,7 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
       return { ok: true, settings: await getSettings() };
     case 'save-settings': {
       const settings = await saveSettings(request.settings);
-      if (settings.backgroundCheckEnabled) void runStartupProbe();
+      void runStartupProbe();
       return { ok: true, settings };
     }
     case 'get-state':

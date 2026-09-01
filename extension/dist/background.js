@@ -812,6 +812,7 @@
   }
   async function runBackgroundCheck(sources, enabled) {
     if (!enabled || sources.length === 0) {
+      await chrome.storage.local.remove(BACKGROUND_CHECK_KEY);
       await chrome.action.setBadgeText({ text: "" });
       return null;
     }
@@ -2217,7 +2218,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
         return { ok: true, settings: await getSettings() };
       case "save-settings": {
         const settings = await saveSettings(request.settings);
-        if (settings.backgroundCheckEnabled) void runStartupProbe();
+        void runStartupProbe();
         return { ok: true, settings };
       }
       case "get-state":

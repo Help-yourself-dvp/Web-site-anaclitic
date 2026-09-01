@@ -185,6 +185,7 @@ export async function runBackgroundCheck(
   enabled: boolean,
 ): Promise<BackgroundCheckState | null> {
   if (!enabled || sources.length === 0) {
+    await chrome.storage.local.remove(BACKGROUND_CHECK_KEY);
     await chrome.action.setBadgeText({ text: '' });
     return null;
   }
