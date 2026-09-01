@@ -1,4 +1,5 @@
 import { sourceForUrl } from './adapters';
+import { clearBackgroundSource, readBackgroundCheck, runBackgroundCheck } from './background-check';
 import {
   getAllSources,
   getLatestRun,
@@ -16,7 +17,7 @@ import {
   resetSource,
 } from './core/db';
 import { latestPost, likelyServicePost, mergeKnownKeys, replyContextPosts, unknownPosts } from './core/collection';
-import { createAiPacketBundle } from './core/prompt';
+import { createAiPacketBundle, createSingleAiPacket } from './core/prompt';
 import { importAiResponse } from './core/importer';
 import { getSettings, saveSettings } from './core/settings';
 import type {
@@ -135,13 +136,19 @@ async function syncCompanion(path: string, body: unknown): Promise<string | null
 }
 
 async function makeState(url: string): Promise<ExtensionState> {
-  const settings = await getSettings();
+  const [settings, sources, backgroundCheck] = await Promise.all([
+    getSettings(),
+    getAllSources(),
+    readBackgroundCheck(),
+  ]);
   if (!/^https?:\/\//i.test(url)) {
     return {
       currentSource: null,
+      sources,
       recentPosts: [],
       recentPostCount: 0,
       recentReports: [],
+      backgroundCheck,
       lastRunAt: null,
       hasCheckpoint: false,
       settings,
@@ -158,9 +165,11 @@ async function makeState(url: string): Promise<ExtensionState> {
   const posts = sortPostsChronologically(storedPosts);
   return {
     currentSource: source,
+    sources,
     recentPosts: posts.slice(-8).reverse(),
     recentPostCount: posts.length,
     recentReports: recentReports.slice(0, 5),
+    backgroundCheck,
     lastRunAt: latestRun?.created_at || null,
     hasCheckpoint: Boolean(source?.last_checkpoint_post_id || source?.last_checkpoint_url),
     settings,
@@ -226,6 +235,7 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
       updated.pending_scan_post_keys = [];
       updated.recent_known_ids = [postKey(checkpoint)];
       await putSource(updated);
+      await clearBackgroundSource(updated.source_id);
       result.source = updated;
       result.posts = [];
       result.diagnostics.push(
@@ -288,6 +298,7 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
   updatedSource.recent_known_ids = mergeKnownKeys(updatedSource.recent_known_ids, result.posts, 1000);
   updatedSource.last_checked_at = nowIso();
   await putSource(updatedSource);
+  await clearBackgroundSource(updatedSource.source_id);
 
   const runKeys = partialNewRun ? segmentKeys : [...pendingPostKeys, ...segmentKeys];
   const allKnownAfterSave = [...storedPosts, ...postsToSave];
@@ -306,7 +317,7 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
   return { ok: true, collection: result };
 }
 
-async function packet(): Promise<BackgroundResponse> {
+async function packet(mode: 'single' | 'split'): Promise<BackgroundResponse> {
   const run = await getLatestRun();
   if (!run || run.post_keys.length === 0) {
     return {
@@ -319,6 +330,10 @@ async function packet(): Promise<BackgroundResponse> {
   const selected = posts.filter((post) => byKey.has(postKey(post)));
   if (selected.length === 0) return { ok: false, error: 'Последний запуск не содержит сохранённых сообщений.' };
   const contextPosts = replyContextPosts(selected, posts);
+  if (mode === 'single') {
+    const single = createSingleAiPacket(selected, contextPosts);
+    return { ok: true, singlePacket: single };
+  }
   const bundle = createAiPacketBundle(selected, contextPosts);
   const packet: PacketResponse = {
     packet_id: bundle.packet_id,
@@ -349,6 +364,7 @@ async function resetActiveSource(url: string): Promise<BackgroundResponse> {
   const source = await getSource(detected.source_id);
   if (!source) return { ok: false, error: 'Для этой темы пока нет сохранённых данных.' };
   await resetSource(source.source_id);
+  await clearBackgroundSource(source.source_id);
   const companionWarning = await syncCompanion('/api/reset', { source_id: source.source_id });
   return {
     ok: true,
@@ -388,6 +404,7 @@ async function cleanServicePosts(url: string): Promise<BackgroundResponse> {
     source.recent_known_ids = source.recent_known_ids.filter((key) => !badKeys.includes(key));
     await putSource(source);
   }
+  await clearBackgroundSource(source.source_id);
   const companionWarning = await syncCompanion('/api/clean', { source_id: source.source_id, post_keys: badKeys });
   return {
     ok: true,
@@ -397,12 +414,23 @@ async function cleanServicePosts(url: string): Promise<BackgroundResponse> {
   };
 }
 
+async function openSavedSource(sourceId: string): Promise<BackgroundResponse> {
+  const source = await getSource(sourceId);
+  if (!source) return { ok: false, error: 'Выбранная тема не найдена в локальной базе.' };
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = tabs[0];
+  if (typeof tab?.id !== 'number') return { ok: false, error: 'Не удалось найти вкладку для открытия темы.' };
+  await chrome.tabs.update(tab.id, { url: source.topic_url });
+  return { ok: true, message: 'Открываю выбранную тему.' };
+}
+
 async function exportLocal(): Promise<BackgroundResponse> {
   const [sources, posts, reports, runs] = await Promise.all([getAllSources(), getPosts(), getReports(), getRuns()]);
   const payload = {
     format: 'forum-knowledge-base-export',
     format_version: '1.0',
     exported_at: nowIso(),
+    note: 'Резервная копия данных для восстановления и архива. Для анализа ИИ используйте отдельную кнопку единого AI-файла.',
     sources,
     posts,
     reports,
@@ -461,18 +489,30 @@ async function importResponse(request: Extract<BackgroundRequest, { type: 'impor
   return { ok: true, importResult: result };
 }
 
+async function runStartupProbe(): Promise<void> {
+  try {
+    const [settings, sources] = await Promise.all([getSettings(), getAllSources()]);
+    await runBackgroundCheck(sources, settings.backgroundCheckEnabled);
+  } catch {
+    // A startup probe must never make the extension unavailable.
+  }
+}
+
 async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
   switch (request.type) {
     case 'get-settings':
       return { ok: true, settings: await getSettings() };
-    case 'save-settings':
-      return { ok: true, settings: await saveSettings(request.settings) };
+    case 'save-settings': {
+      const settings = await saveSettings(request.settings);
+      if (settings.backgroundCheckEnabled) void runStartupProbe();
+      return { ok: true, settings };
+    }
     case 'get-state':
       return { ok: true, state: await makeState(request.url) };
     case 'collect':
       return collect(request);
     case 'create-package':
-      return packet();
+      return packet(request.mode);
     case 'export-local':
       return exportLocal();
     case 'reset-source':
@@ -504,6 +544,8 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
     case 'open-options':
       await chrome.runtime.openOptionsPage();
       return { ok: true, message: 'Открыты настройки.' };
+    case 'open-source':
+      return openSavedSource(request.sourceId);
     default:
       return { ok: false, error: 'Неизвестная команда.' };
   }
@@ -511,6 +553,10 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
 
 chrome.runtime.onInstalled.addListener(() => {
   void getSettings();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void runStartupProbe();
 });
 
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {

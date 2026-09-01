@@ -24,6 +24,7 @@ function normalizeSettings(value: Partial<ExtensionSettings> | null | undefined)
     adapterName: adapterNames.includes(value?.adapterName as AdapterName)
       ? (value?.adapterName as AdapterName)
       : DEFAULT_EXTENSION_SETTINGS.adapterName,
+    backgroundCheckEnabled: value?.backgroundCheckEnabled === true,
     maxPages: clampInteger(value?.maxPages, 1, 50, DEFAULT_EXTENSION_SETTINGS.maxPages),
     delayMs: clampInteger(value?.delayMs, 0, 30_000, DEFAULT_EXTENSION_SETTINGS.delayMs),
     imageMode:

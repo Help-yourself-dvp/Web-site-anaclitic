@@ -1,11 +1,12 @@
 import { build } from 'esbuild';
-import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const src = resolve(root, 'src');
 const out = resolve(root, 'dist');
+const { version } = JSON.parse(await readFile(resolve(root, '../version.json'), 'utf8'));
 
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
@@ -34,16 +35,28 @@ for (const [entry, outfile] of entries) {
 await cp(resolve(src, 'popup.html'), resolve(out, 'popup.html'));
 await cp(resolve(src, 'options.html'), resolve(out, 'options.html'));
 await cp(resolve(src, 'styles.css'), resolve(out, 'styles.css'));
+await cp(resolve(root, 'assets'), resolve(out, 'assets'), { recursive: true });
 await cp(resolve(root, '../schemas/ai-response.schema.json'), resolve(out, 'ai-response.schema.json'));
 
 const manifest = {
   manifest_version: 3,
   name: 'Forum Knowledge Base',
   description: 'Локальный сбор новых сообщений и подготовка материалов для ручного анализа ИИ.',
-  version: '0.2.1',
+  version,
+  icons: {
+    '16': 'assets/icons/icon16.png',
+    '32': 'assets/icons/icon32.png',
+    '48': 'assets/icons/icon48.png',
+    '128': 'assets/icons/icon128.png',
+  },
   action: {
     default_title: 'Forum Knowledge Base',
     default_popup: 'popup.html',
+    default_icon: {
+      '16': 'assets/icons/icon16.png',
+      '32': 'assets/icons/icon32.png',
+      '48': 'assets/icons/icon48.png',
+    },
   },
   options_page: 'options.html',
   background: {

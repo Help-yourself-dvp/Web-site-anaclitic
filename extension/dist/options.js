@@ -7,6 +7,7 @@
     return element;
   };
   var adapterName = $("#adapterName");
+  var backgroundCheckEnabled = $("#backgroundCheckEnabled");
   var maxPages = $("#maxPages");
   var delayMs = $("#delayMs");
   var imageMode = $("#imageMode");
@@ -23,6 +24,7 @@
   }
   function fill(settings) {
     adapterName.value = settings.adapterName;
+    backgroundCheckEnabled.checked = settings.backgroundCheckEnabled;
     maxPages.value = String(settings.maxPages);
     delayMs.value = String(settings.delayMs);
     imageMode.value = settings.imageMode;
@@ -41,6 +43,7 @@
       const settings = {
         companionUrl: companionUrl.value.trim().replace(/\/$/, ""),
         adapterName: adapterName.value,
+        backgroundCheckEnabled: backgroundCheckEnabled.checked,
         maxPages: Number(maxPages.value),
         delayMs: Number(delayMs.value),
         imageMode: imageMode.value,

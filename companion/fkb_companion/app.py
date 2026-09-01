@@ -18,7 +18,7 @@ DATA_DIR = Path(os.getenv("FKB_DATA_DIR", ROOT / "data"))
 DB_PATH = Path(os.getenv("FKB_DB_PATH", DATA_DIR / "forum_knowledge_base.sqlite3"))
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 database = Database(DB_PATH)
-app = FastAPI(title="Forum Knowledge Base", version="0.1.0")
+app = FastAPI(title="Forum Knowledge Base", version="0.3.0")
 # The service is intended for localhost. This also lets a locally loaded extension
 # (whose origin is chrome-extension://...) send explicitly configured sync requests.
 app.add_middleware(

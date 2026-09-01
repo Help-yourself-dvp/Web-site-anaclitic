@@ -8,6 +8,7 @@ const $ = <T extends HTMLElement>(selector: string): T => {
 };
 
 const adapterName = $('#adapterName') as HTMLSelectElement;
+const backgroundCheckEnabled = $('#backgroundCheckEnabled') as HTMLInputElement;
 const maxPages = $('#maxPages') as HTMLInputElement;
 const delayMs = $('#delayMs') as HTMLInputElement;
 const imageMode = $('#imageMode') as HTMLSelectElement;
@@ -27,6 +28,7 @@ function setStatus(message: string, kind: 'neutral' | 'success' | 'warning' | 'e
 
 function fill(settings: ExtensionSettings): void {
   adapterName.value = settings.adapterName;
+  backgroundCheckEnabled.checked = settings.backgroundCheckEnabled;
   maxPages.value = String(settings.maxPages);
   delayMs.value = String(settings.delayMs);
   imageMode.value = settings.imageMode;
@@ -47,6 +49,7 @@ $('#saveSettings').addEventListener('click', () => {
     const settings: ExtensionSettings = {
       companionUrl: companionUrl.value.trim().replace(/\/$/, ''),
       adapterName: adapterName.value as ExtensionSettings['adapterName'],
+      backgroundCheckEnabled: backgroundCheckEnabled.checked,
       maxPages: Number(maxPages.value),
       delayMs: Number(delayMs.value),
       imageMode: imageMode.value as ExtensionSettings['imageMode'],

@@ -729,6 +729,8 @@
     return element;
   };
   var currentUrl = $("#currentUrl");
+  var sourceSelect = $("#sourceSelect");
+  var openSourceButton = $("#openSourceButton");
   var sourceInfo = $("#sourceInfo");
   var automaticInfo = $("#automaticInfo");
   var mediaInfo = $("#mediaInfo");
@@ -741,9 +743,14 @@
   var recentPosts = $("#recentPosts");
   var savedReports = $("#savedReports");
   var storageInfo = $("#storageInfo");
+  var storageFooter = $("#storageFooter");
+  var versionInfo = $("#versionInfo");
   var pagesInput = $("#pagesInput");
   var promptPreview = $("#promptPreview");
   var packageStatus = $("#packageStatus");
+  var singleFormat = $("#singleFormat");
+  var splitPackageButton = $("#splitPackageButton");
+  var copyButton = $("#copyButton");
   var aiResponse = $("#aiResponse");
   var responseFile = $("#responseFile");
   var importResult = $("#importResult");
@@ -765,8 +772,30 @@
     status.textContent = message;
     status.className = `status ${kind}`;
   }
+  function renderSourceSelect(state) {
+    sourceSelect.replaceChildren();
+    if (state.sources.length === 0) {
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "\u041F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0442\u0435\u043C";
+      sourceSelect.append(empty);
+      sourceSelect.disabled = true;
+      openSourceButton.disabled = true;
+      return;
+    }
+    for (const source of state.sources) {
+      const option = document.createElement("option");
+      option.value = source.source_id;
+      option.textContent = source.title || source.topic_url;
+      sourceSelect.append(option);
+    }
+    if (state.currentSource) sourceSelect.value = state.currentSource.source_id;
+    sourceSelect.disabled = false;
+    openSourceButton.disabled = !sourceSelect.value;
+  }
   function renderState(state) {
     currentState = state;
+    renderSourceSelect(state);
     const imageModeLabels = {
       links: "\u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438: \u043D\u0435 \u0441\u043A\u0430\u0447\u0438\u0432\u0430\u044E\u0442\u0441\u044F, \u0441\u043E\u0445\u0440\u0430\u043D\u044F\u044E\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043D\u0430\u0439\u0434\u0435\u043D\u043D\u044B\u0435 URL.",
       all: "\u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438: \u0441\u043E\u0431\u0438\u0440\u0430\u044E\u0442\u0441\u044F URL \u0432\u0441\u0435\u0445 \u0438\u0437\u043E\u0431\u0440\u0430\u0436\u0435\u043D\u0438\u0439.",
@@ -779,7 +808,10 @@
       adapterBadge.textContent = state.currentSource.adapter_name;
       adapterBadge.className = "badge";
       sourceInfo.textContent = `${state.currentSource.title} \xB7 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E \u043F\u043E\u0441\u0442\u043E\u0432: ${state.recentPostCount}`;
-      automaticInfo.textContent = state.currentSource.pending_scan_page_url ? "\u041F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0434\u043E\u0448\u043B\u0430 \u0434\u043E \u0441\u0442\u0430\u0440\u043E\u0439 \u0442\u043E\u0447\u043A\u0438. \u0421\u043B\u0435\u0434\u0443\u044E\u0449\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442 \u044D\u0442\u043E\u0442 \u0434\u0438\u0430\u043F\u0430\u0437\u043E\u043D \u0441\u0430\u043C\u0430." : state.hasCheckpoint ? "\u0412 \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u0440\u0430\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043D\u0430\u0439\u0434\u0451\u0442 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044E\u044E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B. \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0438\u043C\u0435\u043D\u043D\u043E \u0441\u0442\u0430\u0440\u0443\u044E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u043D\u0435 \u043F\u043E\u043D\u0430\u0434\u043E\u0431\u0438\u0442\u0441\u044F." : "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u0435 \u043C\u0435\u0441\u0442\u043E \u0438\u043B\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.";
+      const backgroundItem = state.backgroundCheck?.items.find(
+        (item) => item.source_id === state.currentSource?.source_id
+      );
+      automaticInfo.textContent = state.currentSource.pending_scan_page_url ? "\u041F\u0440\u0435\u0434\u044B\u0434\u0443\u0449\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043D\u0435 \u0434\u043E\u0448\u043B\u0430 \u0434\u043E \u0441\u0442\u0430\u0440\u043E\u0439 \u0442\u043E\u0447\u043A\u0438. \u0421\u043B\u0435\u0434\u0443\u044E\u0449\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043F\u0440\u043E\u0434\u043E\u043B\u0436\u0438\u0442 \u044D\u0442\u043E\u0442 \u0434\u0438\u0430\u043F\u0430\u0437\u043E\u043D \u0441\u0430\u043C\u0430." : backgroundItem?.status === "new-likely" ? `\u0424\u043E\u043D\u043E\u0432\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0437\u0430\u043C\u0435\u0442\u0438\u043B\u0430 \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u044B\u0435 \u043D\u043E\u0432\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F: ${backgroundItem.message}` : backgroundItem?.status === "blocked" ? `\u0424\u043E\u043D\u043E\u0432\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430: ${backgroundItem.message}` : state.hasCheckpoint ? "\u0412 \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439 \u0440\u0430\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u0441\u0430\u043C\u043E \u043D\u0430\u0439\u0434\u0451\u0442 \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044E\u044E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B. \u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0438\u043C\u0435\u043D\u043D\u043E \u0441\u0442\u0430\u0440\u0443\u044E \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0432\u0440\u0443\u0447\u043D\u0443\u044E \u043D\u0435 \u043F\u043E\u043D\u0430\u0434\u043E\u0431\u0438\u0442\u0441\u044F." : "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0437\u0430\u043F\u043E\u043C\u043D\u0438\u0442\u0435 \u043C\u0435\u0441\u0442\u043E \u0438\u043B\u0438 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u0435 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446.";
       mediaInfo.textContent = imageModeLabels[state.settings.imageMode];
       checkpointBadge.textContent = state.hasCheckpoint ? "\u0442\u043E\u0447\u043A\u0430 \u043E\u0442\u0441\u0447\u0451\u0442\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430" : "\u0442\u043E\u0447\u043A\u0430 \u043E\u0442\u0441\u0447\u0451\u0442\u0430 \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u043D\u0430";
       checkpointBadge.className = `badge ${state.hasCheckpoint ? "" : "neutral"}`;
@@ -844,13 +876,17 @@
   }
   async function refreshStorageInfo() {
     if (!navigator.storage?.estimate) {
-      storageInfo.textContent = "\u0414\u0430\u043D\u043D\u044B\u0435 \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u043D\u0430 \u0434\u0438\u0441\u043A\u0435 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430, \u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u044F\u043D\u043D\u043E \u0432 \u043E\u043F\u0435\u0440\u0430\u0442\u0438\u0432\u043D\u043E\u0439 \u043F\u0430\u043C\u044F\u0442\u0438.";
+      const message2 = "\u0414\u0430\u043D\u043D\u044B\u0435 \u0445\u0440\u0430\u043D\u044F\u0442\u0441\u044F \u043D\u0430 \u0434\u0438\u0441\u043A\u0435 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430, \u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u044F\u043D\u043D\u043E \u0432 \u043E\u043F\u0435\u0440\u0430\u0442\u0438\u0432\u043D\u043E\u0439 \u043F\u0430\u043C\u044F\u0442\u0438.";
+      storageInfo.textContent = message2;
+      storageFooter.textContent = "\u0420\u0430\u0437\u043C\u0435\u0440 \u0431\u0430\u0437\u044B: \u0434\u043E\u0441\u0442\u0443\u043F\u0435\u043D \u0432 \u043F\u043E\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u043C\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435";
       return;
     }
     const estimate = await navigator.storage.estimate();
     const usage = estimate.usage || 0;
     const quota = estimate.quota || 0;
-    storageInfo.textContent = quota ? `\u0417\u0430\u043D\u044F\u0442\u043E \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430 \u043F\u0440\u0438\u043C\u0435\u0440\u043D\u043E ${formatBytes(usage)} \u0438\u0437 \u0434\u043E\u0441\u0442\u0443\u043F\u043D\u044B\u0445 ${formatBytes(quota)}. \u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438 \u0437\u0430\u043D\u0438\u043C\u0430\u044E\u0442 \u0431\u043E\u043B\u044C\u0448\u0435 \u043C\u0435\u0441\u0442\u0430, \u0442\u0435\u043A\u0441\u0442 \u2014 \u043E\u0431\u044B\u0447\u043D\u043E \u043D\u0435\u043C\u043D\u043E\u0433\u043E.` : `\u0417\u0430\u043D\u044F\u0442\u043E \u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449\u0435\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430 \u043F\u0440\u0438\u043C\u0435\u0440\u043D\u043E ${formatBytes(usage)}. \u042D\u0442\u043E \u043C\u0435\u0441\u0442\u043E \u043D\u0430 \u0434\u0438\u0441\u043A\u0435, \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u044F\u043D\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0442\u0438\u0432\u043D\u0430\u044F \u043F\u0430\u043C\u044F\u0442\u044C.`;
+    const message = quota ? `\u0417\u0430\u043D\u044F\u0442\u043E \u043F\u0440\u0438\u043C\u0435\u0440\u043D\u043E ${formatBytes(usage)} \u0438\u0437 ${formatBytes(quota)}. \u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438 \u0437\u0430\u043D\u0438\u043C\u0430\u044E\u0442 \u0431\u043E\u043B\u044C\u0448\u0435 \u043C\u0435\u0441\u0442\u0430.` : `\u0417\u0430\u043D\u044F\u0442\u043E \u043F\u0440\u0438\u043C\u0435\u0440\u043D\u043E ${formatBytes(usage)} \u043D\u0430 \u0434\u0438\u0441\u043A\u0435 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430.`;
+    storageInfo.textContent = `${message} \u042D\u0442\u043E \u043C\u0435\u0441\u0442\u043E \u043D\u0430 \u0434\u0438\u0441\u043A\u0435, \u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u044F\u043D\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0442\u0438\u0432\u043D\u0430\u044F \u043F\u0430\u043C\u044F\u0442\u044C.`;
+    storageFooter.textContent = `\u0411\u0430\u0437\u0430: ${formatBytes(usage)}`;
   }
   function renderDiagnostics(items) {
     diagnostics.replaceChildren();
@@ -859,6 +895,11 @@
       item.textContent = text;
       diagnostics.append(item);
     }
+  }
+  async function openSelectedSource() {
+    if (!sourceSelect.value) return;
+    const response = await send({ type: "open-source", sourceId: sourceSelect.value });
+    if (!response.ok) setStatus(response.error, "error");
   }
   async function refresh() {
     const response = await send({ type: "get-state", url: activeUrl });
@@ -965,17 +1006,32 @@
       await refresh();
     });
   }
-  async function createPackage() {
+  async function createPackage(mode) {
     await withBusy(async () => {
-      setStatus("\u0424\u043E\u0440\u043C\u0438\u0440\u0443\u044E prompt \u0438 \u0444\u0430\u0439\u043B\u044B \u043F\u0430\u043A\u0435\u0442\u0430\u2026", "neutral");
-      const response = await send({ type: "create-package" });
+      setStatus(mode === "single" ? "\u0424\u043E\u0440\u043C\u0438\u0440\u0443\u044E \u0435\u0434\u0438\u043D\u044B\u0439 \u0444\u0430\u0439\u043B \u0434\u043B\u044F \u0418\u0418\u2026" : "\u0420\u0430\u0437\u0434\u0435\u043B\u044F\u044E \u0431\u043E\u043B\u044C\u0448\u043E\u0439 \u043F\u0430\u043A\u0435\u0442 \u043D\u0430 \u0447\u0430\u0441\u0442\u0438\u2026", "neutral");
+      const response = await send({ type: "create-package", mode });
       if (!response.ok) {
         packageStatus.textContent = response.error;
         setStatus(response.error, "warning");
         return;
       }
+      if (mode === "single") {
+        if (!("singlePacket" in response)) {
+          setStatus("\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u0432\u0435\u0440\u043D\u0443\u043B\u043E \u043D\u0435\u043E\u0436\u0438\u0434\u0430\u043D\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.", "error");
+          return;
+        }
+        const packet = response.singlePacket;
+        const format = singleFormat.value;
+        const file = format === "json" ? ["ai-full.json", packet.json, "application/json;charset=utf-8"] : format === "txt" ? ["ai-full.txt", packet.text, "text/plain;charset=utf-8"] : ["ai-full.md", packet.markdown, "text/markdown;charset=utf-8"];
+        promptPreview.value = packet.markdown;
+        copyButton.textContent = "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u0435\u0441\u044C prompt";
+        packageStatus.textContent = `\u041E\u0434\u0438\u043D \u0444\u0430\u0439\u043B \u0433\u043E\u0442\u043E\u0432: ${packet.post_count} \u043D\u043E\u0432\u044B\u0445 \u043F\u043E\u0441\u0442\u043E\u0432 \u0438 ${packet.context_count} \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0445 \u0441\u0442\u0430\u0440\u044B\u0445.`;
+        downloadText(file[0], file[1], file[2]);
+        setStatus("\u0415\u0434\u0438\u043D\u044B\u0439 \u0444\u0430\u0439\u043B \u0433\u043E\u0442\u043E\u0432. \u0412 \u043D\u0451\u043C \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u043F\u0440\u043E\u043C\u043F\u0442 \u0438 \u0438\u043D\u0441\u0442\u0440\u0443\u043A\u0446\u0438\u044F \u043F\u043E \u0444\u043E\u0440\u043C\u0430\u0442\u0443 \u043E\u0442\u0432\u0435\u0442\u0430.", "success");
+        return;
+      }
       if (!("packet" in response)) {
-        setStatus("\u0421\u0435\u0440\u0432\u0438\u0441 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0432\u0435\u0440\u043D\u0443\u043B \u043D\u0435\u043E\u0436\u0438\u0434\u0430\u043D\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.", "error");
+        setStatus("\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u0432\u0435\u0440\u043D\u0443\u043B\u043E \u043D\u0435\u043E\u0436\u0438\u0434\u0430\u043D\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442.", "error");
         return;
       }
       const chunks = response.packet.chunks;
@@ -984,6 +1040,7 @@
         setStatus("\u041F\u0430\u043A\u0435\u0442 \u043D\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0447\u0430\u0441\u0442\u0435\u0439 \u0434\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430.", "error");
         return;
       }
+      copyButton.textContent = chunks.length === 1 ? "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u0435\u0441\u044C prompt" : "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u043F\u0435\u0440\u0432\u0443\u044E \u0447\u0430\u0441\u0442\u044C";
       promptPreview.value = chunks.length === 1 ? firstChunk.prompt_md : `\u041F\u0430\u043A\u0435\u0442 \u0440\u0430\u0437\u0434\u0435\u043B\u0451\u043D \u043D\u0430 ${chunks.length} \u0447\u0430\u0441\u0442\u0435\u0439. \u041D\u0438\u0436\u0435 \u043F\u043E\u043A\u0430\u0437\u0430\u043D\u0430 \u0447\u0430\u0441\u0442\u044C 1. \u041E\u0442\u043F\u0440\u0430\u0432\u043B\u044F\u0439\u0442\u0435 \u0418\u0418 \u043A\u0430\u0436\u0434\u044B\u0439 \u0441\u043A\u0430\u0447\u0430\u043D\u043D\u044B\u0439 prompt \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E.
 
 ${firstChunk.prompt_md}`;
@@ -1008,7 +1065,7 @@ ${firstChunk.prompt_md}`;
       const archive = zipSync(Object.fromEntries(files.map(([name, contents]) => [name, strToU8(contents)])));
       downloadBytes("package.zip", archive, "application/zip");
       setStatus(
-        chunks.length === 1 ? "\u041F\u0430\u043A\u0435\u0442 \u0433\u043E\u0442\u043E\u0432. \u0412\u0441\u0442\u0430\u0432\u044C\u0442\u0435 prompt \u0432 \u043E\u043D\u043B\u0430\u0439\u043D-\u0418\u0418 \u0432\u0440\u0443\u0447\u043D\u0443\u044E; \u043E\u0442\u0432\u0435\u0442 \u0437\u0430\u0442\u0435\u043C \u0432\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u043E\u0431\u0440\u0430\u0442\u043D\u043E \u0432 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435." : "\u041F\u0430\u043A\u0435\u0442 \u0433\u043E\u0442\u043E\u0432. \u041E\u0442\u043F\u0440\u0430\u0432\u044C\u0442\u0435 \u0418\u0418 prompts \u043F\u043E \u043E\u0447\u0435\u0440\u0435\u0434\u0438, \u0437\u0430\u0442\u0435\u043C \u0432\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u043E\u0442\u0432\u0435\u0442\u044B \u0432 combine-prompt.md \u0438 \u043F\u043E\u043F\u0440\u043E\u0441\u0438\u0442\u0435 \u0418\u0418 \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0432\u043E\u0434\u043A\u0443.",
+        chunks.length === 1 ? "\u041F\u0430\u043A\u0435\u0442 \u0433\u043E\u0442\u043E\u0432. \u041C\u043E\u0436\u043D\u043E \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C prompt \u0438\u0437 \u043F\u0435\u0440\u0432\u043E\u0439 \u0447\u0430\u0441\u0442\u0438 \u0438\u043B\u0438 \u0432\u044B\u0431\u0440\u0430\u0442\u044C \u0435\u0434\u0438\u043D\u044B\u0439 \u0444\u0430\u0439\u043B." : "\u041F\u0430\u043A\u0435\u0442 \u0433\u043E\u0442\u043E\u0432. \u041E\u0442\u043F\u0440\u0430\u0432\u044C\u0442\u0435 \u0418\u0418 prompts \u043F\u043E \u043E\u0447\u0435\u0440\u0435\u0434\u0438, \u0437\u0430\u0442\u0435\u043C \u0432\u0441\u0442\u0430\u0432\u044C\u0442\u0435 \u043E\u0442\u0432\u0435\u0442\u044B \u0432 combine-prompt.md \u0438 \u043F\u043E\u043F\u0440\u043E\u0441\u0438\u0442\u0435 \u0418\u0418 \u0441\u0434\u0435\u043B\u0430\u0442\u044C \u0438\u0442\u043E\u0433\u043E\u0432\u0443\u044E \u0441\u0432\u043E\u0434\u043A\u0443.",
         "success"
       );
     });
@@ -1138,7 +1195,8 @@ ${firstChunk.prompt_md}`;
   $("#checkpointButton").addEventListener("click", () => void collect("checkpoint"));
   $("#historyButton").addEventListener("click", () => void collect("history"));
   $("#collectButton").addEventListener("click", () => void collect("new"));
-  $("#packageButton").addEventListener("click", () => void createPackage());
+  $("#packageButton").addEventListener("click", () => void createPackage("single"));
+  splitPackageButton.addEventListener("click", () => void createPackage("split"));
   $("#exportButton").addEventListener("click", () => void exportLocal());
   localSearchButton.addEventListener("click", () => void searchLocal());
   localSearch.addEventListener("keydown", (event) => {
@@ -1148,6 +1206,10 @@ ${firstChunk.prompt_md}`;
   $("#refreshButton").addEventListener("click", () => void refresh());
   $("#settingsButton").addEventListener("click", () => void send({ type: "open-options" }));
   $("#settingsTextButton").addEventListener("click", () => void send({ type: "open-options" }));
+  sourceSelect.addEventListener("change", () => {
+    openSourceButton.disabled = !sourceSelect.value;
+  });
+  openSourceButton.addEventListener("click", () => void openSelectedSource());
   $("#copyButton").addEventListener("click", async () => {
     if (!promptPreview.value) return;
     await navigator.clipboard.writeText(promptPreview.value);
@@ -1155,10 +1217,10 @@ ${firstChunk.prompt_md}`;
   });
   void (async () => {
     try {
+      versionInfo.textContent = `\u0412\u0435\u0440\u0441\u0438\u044F ${chrome.runtime.getManifest().version}`;
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       activeUrl = tabs[0]?.url || "";
       currentUrl.textContent = activeUrl || "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043E\u043F\u0440\u0435\u0434\u0435\u043B\u0438\u0442\u044C URL \u0430\u043A\u0442\u0438\u0432\u043D\u043E\u0439 \u0432\u043A\u043B\u0430\u0434\u043A\u0438.";
-      const copyButton = $("#copyButton");
       copyButton.disabled = !activeUrl;
       await refresh();
     } catch (error) {

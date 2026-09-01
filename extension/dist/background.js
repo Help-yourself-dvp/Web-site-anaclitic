@@ -22,6 +22,9 @@
       return null;
     }
   }
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
   function clampInteger(value, min, max, fallback) {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return fallback;
@@ -301,9 +304,9 @@
     const relPrevious = document.querySelector('a[rel="prev"], link[rel="prev"]');
     const relUrl = relPrevious ? normalizeUrl(relPrevious.href, pageUrl) : null;
     if (relUrl && relUrl !== pageUrl) return relUrl;
-    const sameTopic2 = sameTopicAnchors(document, pageUrl);
+    const sameTopic3 = sameTopicAnchors(document, pageUrl);
     const currentOffset = offsetOf(pageUrl);
-    const labelled = sameTopic2.filter(({ anchor }) => {
+    const labelled = sameTopic3.filter(({ anchor }) => {
       const label = labelOf(anchor);
       return /предыдущ|назад|previous|\bprev\b|‹|←|\bback\b/.test(label);
     });
@@ -313,7 +316,7 @@
     if (labelledWithLowerOffset[0]?.url && labelledWithLowerOffset[0].url !== pageUrl)
       return labelledWithLowerOffset[0].url;
     if (currentOffset !== null) {
-      const lowerOffsets = sameTopic2.map((item) => ({ ...item, offset: offsetOf(item.url) })).filter((item) => item.offset !== null && item.offset < currentOffset).sort((a, b) => b.offset - a.offset);
+      const lowerOffsets = sameTopic3.map((item) => ({ ...item, offset: offsetOf(item.url) })).filter((item) => item.offset !== null && item.offset < currentOffset).sort((a, b) => b.offset - a.offset);
       if (lowerOffsets[0]?.url && lowerOffsets[0].url !== pageUrl) return lowerOffsets[0].url;
     }
     return null;
@@ -321,8 +324,8 @@
   function findLastPageUrl(document, pageUrl) {
     const currentOffset = offsetOf(pageUrl);
     if (currentOffset === null) return null;
-    const sameTopic2 = sameTopicAnchors(document, pageUrl);
-    const candidates = sameTopic2.map((item) => ({ ...item, offset: offsetOf(item.url) })).filter((item) => item.offset !== null && item.offset > currentOffset).sort((a, b) => b.offset - a.offset);
+    const sameTopic3 = sameTopicAnchors(document, pageUrl);
+    const candidates = sameTopic3.map((item) => ({ ...item, offset: offsetOf(item.url) })).filter((item) => item.offset !== null && item.offset > currentOffset).sort((a, b) => b.offset - a.offset);
     if (candidates.length === 0) return null;
     const labelled = candidates.filter(({ anchor }) => /послед|last|конец|»/.test(labelOf(anchor)));
     return (labelled[0] || candidates[0])?.url || null;
@@ -650,6 +653,185 @@
       },
       enabled: true
     };
+  }
+
+  // src/background-check.ts
+  var BACKGROUND_CHECK_KEY = "fkb-background-check";
+  function probeOffset(url) {
+    try {
+      const parsed = new URL(url);
+      const fullOffset = parsed.searchParams.get("st");
+      if (fullOffset !== null) {
+        const value = Number.parseInt(fullOffset, 10);
+        return Number.isFinite(value) ? value : null;
+      }
+      const lofiOffset = parsed.search.match(/[?&]t\d+-(\d+)\.html(?:&|$)/i)?.[1];
+      if (lofiOffset) {
+        const value = Number.parseInt(lofiOffset, 10);
+        return Number.isFinite(value) ? value : null;
+      }
+      return 0;
+    } catch {
+      return null;
+    }
+  }
+  function sameTopic2(sourceUrl, candidateUrl) {
+    try {
+      const source = new URL(sourceUrl);
+      const candidate = new URL(candidateUrl);
+      return source.origin === candidate.origin && parseTopicId(sourceUrl) === parseTopicId(candidateUrl);
+    } catch {
+      return false;
+    }
+  }
+  function lastPageUrl(html, pageUrl) {
+    const currentOffset = probeOffset(pageUrl);
+    if (currentOffset === null) return null;
+    const links = [];
+    const anchorPattern = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    for (const match of html.matchAll(anchorPattern)) {
+      const rawUrl = match[1]?.replace(/&amp;/g, "&");
+      if (!rawUrl) continue;
+      try {
+        const url = new URL(rawUrl, pageUrl).href;
+        const offset = probeOffset(url);
+        if (!sameTopic2(pageUrl, url) || offset === null || offset <= currentOffset) continue;
+        const label = (match[2] || "").replace(/<[^>]+>/g, " ").trim().toLocaleLowerCase();
+        links.push({ url, offset, label });
+      } catch {
+      }
+    }
+    if (links.length === 0) return null;
+    const labelled = links.filter((link) => /послед|last|конец|»/.test(link.label));
+    return (labelled.sort((a, b) => b.offset - a.offset)[0] || links.sort((a, b) => b.offset - a.offset)[0])?.url || null;
+  }
+  function looksProtected(response, html) {
+    if (response.status === 403) return "\u0421\u0430\u0439\u0442 \u0432\u0435\u0440\u043D\u0443\u043B 403; \u0444\u043E\u043D\u043E\u0432\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430.";
+    if (response.status === 429) return "\u0421\u0430\u0439\u0442 \u0432\u0435\u0440\u043D\u0443\u043B 429; \u0444\u043E\u043D\u043E\u0432\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430.";
+    if (response.status >= 400) return `\u0421\u0430\u0439\u0442 \u0432\u0435\u0440\u043D\u0443\u043B HTTP ${response.status}; \u0444\u043E\u043D\u043E\u0432\u0430\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u043E\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0430.`;
+    const sample = html.slice(0, 12e4).toLocaleLowerCase();
+    if (/cf-chl-|challenge-platform|g-recaptcha|hcaptcha|turnstile/.test(sample))
+      return "\u041E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u0430 CAPTCHA \u0438\u043B\u0438 \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0430.";
+    return null;
+  }
+  function decodeResponse(response, bytes) {
+    const prefix = new TextDecoder("windows-1251").decode(bytes.slice(0, 2e4));
+    const declared = prefix.match(/(?:charset|ipb_var_charset)\s*[=:]\s*["']?([\w-]+)/i)?.[1]?.toLowerCase() || response.headers.get("content-type")?.match(/charset\s*=\s*["']?([\w-]+)/i)?.[1]?.toLowerCase() || "";
+    const encoding = declared === "utf-8" ? "utf-8" : declared === "koi8-r" ? "koi8-r" : "windows-1251";
+    try {
+      return new TextDecoder(encoding).decode(bytes);
+    } catch {
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+  }
+  async function fetchDecoded(url) {
+    const response = await fetch(url, { credentials: "include", redirect: "follow" });
+    const bytes = await response.arrayBuffer();
+    return { response, html: decodeResponse(response, bytes) };
+  }
+  async function probeSource(source) {
+    const checkedAt = nowIso();
+    if (!source.enabled || source.adapter_name !== "4pda") {
+      return {
+        source_id: source.source_id,
+        title: source.title,
+        status: "not-configured",
+        message: "\u0410\u0432\u0442\u043E\u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0430 \u0432\u043A\u043B\u044E\u0447\u0435\u043D\u0430 \u0442\u043E\u043B\u044C\u043A\u043E \u0434\u043B\u044F 4PDA; \u0434\u043B\u044F \u044D\u0442\u043E\u0433\u043E \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u0432\u0440\u0443\u0447\u043D\u0443\u044E.",
+        checked_at: checkedAt
+      };
+    }
+    const startUrl = source.last_checkpoint_page_url || source.topic_url;
+    try {
+      const first = await fetchDecoded(startUrl);
+      const blocked = looksProtected(first.response, first.html);
+      if (blocked) {
+        return {
+          source_id: source.source_id,
+          title: source.title,
+          status: "blocked",
+          message: blocked,
+          checked_at: checkedAt
+        };
+      }
+      const lastUrl = lastPageUrl(first.html, first.response.url || startUrl);
+      let latestUrl = first.response.url || startUrl;
+      let latestHtml = first.html;
+      if (lastUrl) {
+        const last = await fetchDecoded(lastUrl);
+        const lastBlocked = looksProtected(last.response, last.html);
+        if (lastBlocked) {
+          return {
+            source_id: source.source_id,
+            title: source.title,
+            status: "blocked",
+            message: lastBlocked,
+            checked_at: checkedAt
+          };
+        }
+        latestUrl = last.response.url || lastUrl;
+        latestHtml = last.html;
+      }
+      const checkpointOffset = probeOffset(startUrl) || 0;
+      const latestOffset = probeOffset(latestUrl) || 0;
+      const checkpointId = Number.parseInt(source.last_checkpoint_post_id || "", 10);
+      const postIds = [...latestHtml.matchAll(/id=["']post-(\d+)["']/gi)].map((match) => Number.parseInt(match[1] || "", 10)).filter(Number.isFinite);
+      const latestPostId = postIds.length ? Math.max(...postIds) : null;
+      const hasNewPage = latestOffset > checkpointOffset;
+      const hasNewPost = Number.isFinite(checkpointId) && latestPostId !== null && latestPostId > checkpointId;
+      return {
+        source_id: source.source_id,
+        title: source.title,
+        status: hasNewPage || hasNewPost ? "new-likely" : "no-change",
+        message: hasNewPage || hasNewPost ? "\u0412\u0435\u0440\u043E\u044F\u0442\u043D\u043E \u043F\u043E\u044F\u0432\u0438\u043B\u0438\u0441\u044C \u043D\u043E\u0432\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F. \u041E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0442\u0435\u043C\u0443 \u0438 \u0437\u0430\u043F\u0443\u0441\u0442\u0438\u0442\u0435 \u043E\u0431\u044B\u0447\u043D\u0443\u044E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443." : "\u041D\u043E\u0432\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446 \u0438\u043B\u0438 \u043F\u043E\u0441\u0442\u043E\u0432 \u043D\u0435 \u043E\u0431\u043D\u0430\u0440\u0443\u0436\u0435\u043D\u043E.",
+        checked_at: checkedAt
+      };
+    } catch (error) {
+      return {
+        source_id: source.source_id,
+        title: source.title,
+        status: "error",
+        message: `\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A: ${error instanceof Error ? error.message : String(error)}`,
+        checked_at: checkedAt
+      };
+    }
+  }
+  async function readBackgroundCheck() {
+    const stored = await chrome.storage.local.get(BACKGROUND_CHECK_KEY);
+    const value = stored[BACKGROUND_CHECK_KEY];
+    if (!value || typeof value.checked_at !== "string" || !Array.isArray(value.items)) return null;
+    return value;
+  }
+  async function setBadge(items) {
+    const hasNew = items.some((item) => item.status === "new-likely");
+    const hasBlocked = items.some((item) => item.status === "blocked");
+    const hasError = items.some((item) => item.status === "error");
+    const text = hasNew ? "+" : hasBlocked ? "!" : hasError ? "?" : "";
+    await chrome.action.setBadgeText({ text });
+    if (text)
+      await chrome.action.setBadgeBackgroundColor({ color: hasNew ? "#147d53" : hasBlocked ? "#b42318" : "#a25b00" });
+  }
+  async function runBackgroundCheck(sources, enabled) {
+    if (!enabled || sources.length === 0) {
+      await chrome.action.setBadgeText({ text: "" });
+      return null;
+    }
+    const items = [];
+    for (const source of sources) {
+      if (items.length > 0) await sleep(1500);
+      items.push(await probeSource(source));
+    }
+    const state = { checked_at: nowIso(), items };
+    await chrome.storage.local.set({ [BACKGROUND_CHECK_KEY]: state });
+    await setBadge(items);
+    return state;
+  }
+  async function clearBackgroundSource(sourceId) {
+    const current = await readBackgroundCheck();
+    if (!current) return;
+    const items = current.items.filter((item) => item.source_id !== sourceId);
+    const next = { ...current, items };
+    await chrome.storage.local.set({ [BACKGROUND_CHECK_KEY]: next });
+    await setBadge(items);
   }
 
   // src/core/db.ts
@@ -1073,6 +1255,30 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       null,
       2
     );
+  }
+  function createSingleAiPacket(postsInput, contextPostsInput = []) {
+    const packet2 = createAiPacket(postsInput, contextPostsInput);
+    const links = JSON.parse(packet2.links_json);
+    const json = JSON.stringify(
+      {
+        format: "forum-knowledge-base-single-ai-file",
+        format_version: "1.0",
+        instructions: packet2.prompt_md,
+        posts: packet2.posts,
+        context_posts: packet2.context_posts,
+        links,
+        note: "\u041F\u043E\u043B\u0435 instructions \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u043F\u043E\u043B\u043D\u044B\u0439 \u043F\u0440\u043E\u043C\u043F\u0442. \u042D\u0442\u043E\u0442 \u0444\u0430\u0439\u043B \u043F\u0440\u0435\u0434\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D \u0434\u043B\u044F \u0437\u0430\u0433\u0440\u0443\u0437\u043A\u0438 \u0432 \u0418\u0418, \u0430 \u043D\u0435 \u0434\u043B\u044F \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0431\u0430\u0437\u044B."
+      },
+      null,
+      2
+    );
+    return {
+      markdown: packet2.prompt_md,
+      json,
+      text: packet2.prompt_md,
+      post_count: packet2.posts.length,
+      context_count: packet2.context_posts.length
+    };
   }
   function createAiPacket(postsInput, contextPostsInput = []) {
     const posts = sortPostsChronologically(postsInput);
@@ -1530,6 +1736,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
   var DEFAULT_EXTENSION_SETTINGS = {
     companionUrl: "http://127.0.0.1:8765",
     adapterName: "auto",
+    backgroundCheckEnabled: false,
     maxPages: 50,
     delayMs: 1200,
     imageMode: "links",
@@ -1557,6 +1764,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     return {
       companionUrl: normalizeCompanionUrl(value?.companionUrl),
       adapterName: adapterNames.includes(value?.adapterName) ? value?.adapterName : DEFAULT_EXTENSION_SETTINGS.adapterName,
+      backgroundCheckEnabled: value?.backgroundCheckEnabled === true,
       maxPages: clampInteger(value?.maxPages, 1, 50, DEFAULT_EXTENSION_SETTINGS.maxPages),
       delayMs: clampInteger(value?.delayMs, 0, 3e4, DEFAULT_EXTENSION_SETTINGS.delayMs),
       imageMode: value?.imageMode === "all" || value?.imageMode === "keywords" || value?.imageMode === "manual" ? value.imageMode : "links",
@@ -1667,13 +1875,19 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     }
   }
   async function makeState(url) {
-    const settings = await getSettings();
+    const [settings, sources, backgroundCheck] = await Promise.all([
+      getSettings(),
+      getAllSources(),
+      readBackgroundCheck()
+    ]);
     if (!/^https?:\/\//i.test(url)) {
       return {
         currentSource: null,
+        sources,
         recentPosts: [],
         recentPostCount: 0,
         recentReports: [],
+        backgroundCheck,
         lastRunAt: null,
         hasCheckpoint: false,
         settings
@@ -1690,9 +1904,11 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     const posts = sortPostsChronologically(storedPosts);
     return {
       currentSource: source,
+      sources,
       recentPosts: posts.slice(-8).reverse(),
       recentPostCount: posts.length,
       recentReports: recentReports.slice(0, 5),
+      backgroundCheck,
       lastRunAt: latestRun?.created_at || null,
       hasCheckpoint: Boolean(source?.last_checkpoint_post_id || source?.last_checkpoint_url),
       settings
@@ -1751,6 +1967,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
         updated.pending_scan_post_keys = [];
         updated.recent_known_ids = [postKey(checkpoint)];
         await putSource(updated);
+        await clearBackgroundSource(updated.source_id);
         result.source = updated;
         result.posts = [];
         result.diagnostics.push(
@@ -1810,6 +2027,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     updatedSource.recent_known_ids = mergeKnownKeys(updatedSource.recent_known_ids, result.posts, 1e3);
     updatedSource.last_checked_at = nowIso();
     await putSource(updatedSource);
+    await clearBackgroundSource(updatedSource.source_id);
     const runKeys = partialNewRun ? segmentKeys : [...pendingPostKeys, ...segmentKeys];
     const allKnownAfterSave = [...storedPosts, ...postsToSave];
     const runPosts = allKnownAfterSave.filter((post) => runKeys.includes(postKey(post)));
@@ -1826,7 +2044,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     result.diagnostics.push(`\u041D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u043E: ${postsToSave.length}. \u041F\u043E\u0432\u0442\u043E\u0440\u0435\u043D\u0438\u044F \u043E\u0442\u0431\u0440\u043E\u0448\u0435\u043D\u044B.`);
     return { ok: true, collection: result };
   }
-  async function packet() {
+  async function packet(mode) {
     const run = await getLatestRun();
     if (!run || run.post_keys.length === 0) {
       return {
@@ -1839,6 +2057,10 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     const selected = posts.filter((post) => byKey.has(postKey(post)));
     if (selected.length === 0) return { ok: false, error: "\u041F\u043E\u0441\u043B\u0435\u0434\u043D\u0438\u0439 \u0437\u0430\u043F\u0443\u0441\u043A \u043D\u0435 \u0441\u043E\u0434\u0435\u0440\u0436\u0438\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439." };
     const contextPosts = replyContextPosts(selected, posts);
+    if (mode === "single") {
+      const single = createSingleAiPacket(selected, contextPosts);
+      return { ok: true, singlePacket: single };
+    }
     const bundle = createAiPacketBundle(selected, contextPosts);
     const packet2 = {
       packet_id: bundle.packet_id,
@@ -1868,6 +2090,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     const source = await getSource(detected.source_id);
     if (!source) return { ok: false, error: "\u0414\u043B\u044F \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B \u043F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u0434\u0430\u043D\u043D\u044B\u0445." };
     await resetSource(source.source_id);
+    await clearBackgroundSource(source.source_id);
     const companionWarning = await syncCompanion("/api/reset", { source_id: source.source_id });
     return {
       ok: true,
@@ -1903,11 +2126,21 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       source.recent_known_ids = source.recent_known_ids.filter((key) => !badKeys.includes(key));
       await putSource(source);
     }
+    await clearBackgroundSource(source.source_id);
     const companionWarning = await syncCompanion("/api/clean", { source_id: source.source_id, post_keys: badKeys });
     return {
       ok: true,
       message: companionWarning ? `\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0437\u0430\u043F\u0438\u0441\u0435\u0439 \u0432 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0438: ${badKeys.length}. ${companionWarning}` : `\u0423\u0434\u0430\u043B\u0435\u043D\u043E \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0437\u0430\u043F\u0438\u0441\u0435\u0439: ${badKeys.length}. \u0422\u043E\u0447\u043A\u0430 \u043E\u0442\u0441\u0447\u0451\u0442\u0430 \u0441\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430.`
     };
+  }
+  async function openSavedSource(sourceId) {
+    const source = await getSource(sourceId);
+    if (!source) return { ok: false, error: "\u0412\u044B\u0431\u0440\u0430\u043D\u043D\u0430\u044F \u0442\u0435\u043C\u0430 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430 \u0432 \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E\u0439 \u0431\u0430\u0437\u0435." };
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs[0];
+    if (typeof tab?.id !== "number") return { ok: false, error: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u043D\u0430\u0439\u0442\u0438 \u0432\u043A\u043B\u0430\u0434\u043A\u0443 \u0434\u043B\u044F \u043E\u0442\u043A\u0440\u044B\u0442\u0438\u044F \u0442\u0435\u043C\u044B." };
+    await chrome.tabs.update(tab.id, { url: source.topic_url });
+    return { ok: true, message: "\u041E\u0442\u043A\u0440\u044B\u0432\u0430\u044E \u0432\u044B\u0431\u0440\u0430\u043D\u043D\u0443\u044E \u0442\u0435\u043C\u0443." };
   }
   async function exportLocal() {
     const [sources, posts, reports, runs] = await Promise.all([getAllSources(), getPosts(), getReports(), getRuns()]);
@@ -1915,6 +2148,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       format: "forum-knowledge-base-export",
       format_version: "1.0",
       exported_at: nowIso(),
+      note: "\u0420\u0435\u0437\u0435\u0440\u0432\u043D\u0430\u044F \u043A\u043E\u043F\u0438\u044F \u0434\u0430\u043D\u043D\u044B\u0445 \u0434\u043B\u044F \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F \u0438 \u0430\u0440\u0445\u0438\u0432\u0430. \u0414\u043B\u044F \u0430\u043D\u0430\u043B\u0438\u0437\u0430 \u0418\u0418 \u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439\u0442\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u0443\u044E \u043A\u043D\u043E\u043F\u043A\u0443 \u0435\u0434\u0438\u043D\u043E\u0433\u043E AI-\u0444\u0430\u0439\u043B\u0430.",
       sources,
       posts,
       reports,
@@ -1970,18 +2204,28 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     if (companionWarning) result.warnings.push(companionWarning);
     return { ok: true, importResult: result };
   }
+  async function runStartupProbe() {
+    try {
+      const [settings, sources] = await Promise.all([getSettings(), getAllSources()]);
+      await runBackgroundCheck(sources, settings.backgroundCheckEnabled);
+    } catch {
+    }
+  }
   async function handle(request) {
     switch (request.type) {
       case "get-settings":
         return { ok: true, settings: await getSettings() };
-      case "save-settings":
-        return { ok: true, settings: await saveSettings(request.settings) };
+      case "save-settings": {
+        const settings = await saveSettings(request.settings);
+        if (settings.backgroundCheckEnabled) void runStartupProbe();
+        return { ok: true, settings };
+      }
       case "get-state":
         return { ok: true, state: await makeState(request.url) };
       case "collect":
         return collect(request);
       case "create-package":
-        return packet();
+        return packet(request.mode);
       case "export-local":
         return exportLocal();
       case "reset-source":
@@ -2013,12 +2257,17 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       case "open-options":
         await chrome.runtime.openOptionsPage();
         return { ok: true, message: "\u041E\u0442\u043A\u0440\u044B\u0442\u044B \u043D\u0430\u0441\u0442\u0440\u043E\u0439\u043A\u0438." };
+      case "open-source":
+        return openSavedSource(request.sourceId);
       default:
         return { ok: false, error: "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u0430\u044F \u043A\u043E\u043C\u0430\u043D\u0434\u0430." };
     }
   }
   chrome.runtime.onInstalled.addListener(() => {
     void getSettings();
+  });
+  chrome.runtime.onStartup.addListener(() => {
+    void runStartupProbe();
   });
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     void handle(message).then((response) => sendResponse(response)).catch(

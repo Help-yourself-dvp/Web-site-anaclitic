@@ -22,6 +22,13 @@
           <span id="adapterBadge" class="badge">проверяем…</span>
         </div>
         <p id="currentUrl" class="muted url-line">Откройте тему форума в этой вкладке.</p>
+        <div class="topic-switcher">
+          <label for="sourceSelect">Сохранённые темы</label>
+          <select id="sourceSelect">
+            <option value="">Пока нет сохранённых тем</option>
+          </select>
+          <button id="openSourceButton" class="secondary">Открыть выбранную тему</button>
+        </div>
         <p id="sourceInfo" class="source-info"></p>
         <p id="automaticInfo" class="hint"></p>
         <p id="mediaInfo" class="hint"></p>
@@ -63,12 +70,20 @@
           <h2>3. Получить выжимку через ИИ</h2>
           <span id="postCount" class="muted">нет данных</span>
         </div>
-        <button id="packageButton" class="primary wide">Подготовить файлы для ИИ</button>
-        <button id="exportButton" class="secondary wide">Сохранить резервную копию</button>
+        <div class="control-row ai-file-row">
+          <label for="singleFormat">Формат одного файла</label>
+          <select id="singleFormat">
+            <option value="md">Markdown (.md) — рекомендуется</option>
+            <option value="json">JSON (.json) — с данными и промптом</option>
+            <option value="txt">Обычный текст (.txt)</option>
+          </select>
+        </div>
+        <button id="packageButton" class="primary wide">Скачать одним файлом для ИИ</button>
+        <button id="splitPackageButton" class="secondary wide">Скачать с разбивкой на части</button>
+        <button id="exportButton" class="secondary wide">Сохранить резервную копию данных (не для ИИ)</button>
         <p class="hint">
-          В пакет также попадут ссылки, цитаты и найденные ссылки на сообщения, на которые отвечают новые посты. Старые
-          связанные посты из базы будут добавлены отдельно как контекст. Если текст слишком большой, он автоматически
-          разделится на несколько prompt-файлов; после них используйте скачанный combine-prompt.md для общей выжимки.
+          Единый файл содержит сразу инструкции для ИИ и все сообщения. Режим с разбивкой нужен только для очень
+          большого объёма, когда ИИ не принимает всё целиком.
         </p>
         <div class="copy-row">
           <button id="copyButton" class="secondary" disabled>Копировать prompt</button>
@@ -155,6 +170,10 @@
         <ul id="diagnostics" class="diagnostics"></ul>
         <div id="recentPosts" class="recent-posts"></div>
       </section>
+      <footer class="popup-footer">
+        <span id="versionInfo">Версия расширения</span>
+        <span id="storageFooter">Размер базы: проверяется…</span>
+      </footer>
     </main>
     <script src="popup.js"></script>
   </body>

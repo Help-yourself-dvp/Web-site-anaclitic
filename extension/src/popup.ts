@@ -10,6 +10,8 @@ const $ = <T extends HTMLElement>(selector: string): T => {
 };
 
 const currentUrl = $('#currentUrl');
+const sourceSelect = $('#sourceSelect') as HTMLSelectElement;
+const openSourceButton = $('#openSourceButton') as HTMLButtonElement;
 const sourceInfo = $('#sourceInfo');
 const automaticInfo = $('#automaticInfo');
 const mediaInfo = $('#mediaInfo');
@@ -22,9 +24,14 @@ const diagnostics = $('#diagnostics');
 const recentPosts = $('#recentPosts');
 const savedReports = $('#savedReports');
 const storageInfo = $('#storageInfo');
+const storageFooter = $('#storageFooter');
+const versionInfo = $('#versionInfo');
 const pagesInput = $('#pagesInput') as HTMLInputElement;
 const promptPreview = $('#promptPreview') as HTMLTextAreaElement;
 const packageStatus = $('#packageStatus');
+const singleFormat = $('#singleFormat') as HTMLSelectElement;
+const splitPackageButton = $('#splitPackageButton') as HTMLButtonElement;
+const copyButton = $('#copyButton') as HTMLButtonElement;
 const aiResponse = $('#aiResponse') as HTMLTextAreaElement;
 const responseFile = $('#responseFile') as HTMLInputElement;
 const importResult = $('#importResult');
@@ -50,8 +57,31 @@ function setStatus(message: string, kind: 'neutral' | 'success' | 'warning' | 'e
   status.className = `status ${kind}`;
 }
 
+function renderSourceSelect(state: ExtensionState): void {
+  sourceSelect.replaceChildren();
+  if (state.sources.length === 0) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'Пока нет сохранённых тем';
+    sourceSelect.append(empty);
+    sourceSelect.disabled = true;
+    openSourceButton.disabled = true;
+    return;
+  }
+  for (const source of state.sources) {
+    const option = document.createElement('option');
+    option.value = source.source_id;
+    option.textContent = source.title || source.topic_url;
+    sourceSelect.append(option);
+  }
+  if (state.currentSource) sourceSelect.value = state.currentSource.source_id;
+  sourceSelect.disabled = false;
+  openSourceButton.disabled = !sourceSelect.value;
+}
+
 function renderState(state: ExtensionState): void {
   currentState = state;
+  renderSourceSelect(state);
   const imageModeLabels: Record<ExtensionState['settings']['imageMode'], string> = {
     links: 'Картинки: не скачиваются, сохраняются только найденные URL.',
     all: 'Картинки: собираются URL всех изображений.',
@@ -64,11 +94,18 @@ function renderState(state: ExtensionState): void {
     adapterBadge.textContent = state.currentSource.adapter_name;
     adapterBadge.className = 'badge';
     sourceInfo.textContent = `${state.currentSource.title} · сохранено постов: ${state.recentPostCount}`;
+    const backgroundItem = state.backgroundCheck?.items.find(
+      (item) => item.source_id === state.currentSource?.source_id,
+    );
     automaticInfo.textContent = state.currentSource.pending_scan_page_url
       ? 'Предыдущая проверка не дошла до старой точки. Следующая проверка продолжит этот диапазон сама.'
-      : state.hasCheckpoint
-        ? 'В следующий раз расширение само найдёт последнюю страницу этой темы. Открыть именно старую страницу вручную не понадобится.'
-        : 'Сначала запомните место или загрузите несколько последних страниц.';
+      : backgroundItem?.status === 'new-likely'
+        ? `Фоновая проверка заметила возможные новые сообщения: ${backgroundItem.message}`
+        : backgroundItem?.status === 'blocked'
+          ? `Фоновая проверка остановлена: ${backgroundItem.message}`
+          : state.hasCheckpoint
+            ? 'В следующий раз расширение само найдёт последнюю страницу этой темы. Открыть именно старую страницу вручную не понадобится.'
+            : 'Сначала запомните место или загрузите несколько последних страниц.';
     mediaInfo.textContent = imageModeLabels[state.settings.imageMode];
     checkpointBadge.textContent = state.hasCheckpoint ? 'точка отсчёта сохранена' : 'точка отсчёта не создана';
     checkpointBadge.className = `badge ${state.hasCheckpoint ? '' : 'neutral'}`;
@@ -138,15 +175,19 @@ function formatBytes(bytes: number): string {
 
 async function refreshStorageInfo(): Promise<void> {
   if (!navigator.storage?.estimate) {
-    storageInfo.textContent = 'Данные хранятся на диске браузера, а не постоянно в оперативной памяти.';
+    const message = 'Данные хранятся на диске браузера, а не постоянно в оперативной памяти.';
+    storageInfo.textContent = message;
+    storageFooter.textContent = 'Размер базы: доступен в поддерживаемом браузере';
     return;
   }
   const estimate = await navigator.storage.estimate();
   const usage = estimate.usage || 0;
   const quota = estimate.quota || 0;
-  storageInfo.textContent = quota
-    ? `Занято хранилищем браузера примерно ${formatBytes(usage)} из доступных ${formatBytes(quota)}. Картинки занимают больше места, текст — обычно немного.`
-    : `Занято хранилищем браузера примерно ${formatBytes(usage)}. Это место на диске, не постоянная оперативная память.`;
+  const message = quota
+    ? `Занято примерно ${formatBytes(usage)} из ${formatBytes(quota)}. Картинки занимают больше места.`
+    : `Занято примерно ${formatBytes(usage)} на диске браузера.`;
+  storageInfo.textContent = `${message} Это место на диске, а не постоянная оперативная память.`;
+  storageFooter.textContent = `База: ${formatBytes(usage)}`;
 }
 
 function renderDiagnostics(items: string[]): void {
@@ -156,6 +197,12 @@ function renderDiagnostics(items: string[]): void {
     item.textContent = text;
     diagnostics.append(item);
   }
+}
+
+async function openSelectedSource(): Promise<void> {
+  if (!sourceSelect.value) return;
+  const response = await send({ type: 'open-source', sourceId: sourceSelect.value });
+  if (!response.ok) setStatus(response.error, 'error');
 }
 
 async function refresh(): Promise<void> {
@@ -271,17 +318,39 @@ async function collect(mode: 'checkpoint' | 'history' | 'new'): Promise<void> {
   });
 }
 
-async function createPackage(): Promise<void> {
+async function createPackage(mode: 'single' | 'split'): Promise<void> {
   await withBusy(async () => {
-    setStatus('Формирую prompt и файлы пакета…', 'neutral');
-    const response = await send({ type: 'create-package' });
+    setStatus(mode === 'single' ? 'Формирую единый файл для ИИ…' : 'Разделяю большой пакет на части…', 'neutral');
+    const response = await send({ type: 'create-package', mode });
     if (!response.ok) {
       packageStatus.textContent = response.error;
       setStatus(response.error, 'warning');
       return;
     }
+
+    if (mode === 'single') {
+      if (!('singlePacket' in response)) {
+        setStatus('Расширение вернуло неожиданный ответ.', 'error');
+        return;
+      }
+      const packet = response.singlePacket;
+      const format = singleFormat.value;
+      const file: [string, string, string] =
+        format === 'json'
+          ? ['ai-full.json', packet.json, 'application/json;charset=utf-8']
+          : format === 'txt'
+            ? ['ai-full.txt', packet.text, 'text/plain;charset=utf-8']
+            : ['ai-full.md', packet.markdown, 'text/markdown;charset=utf-8'];
+      promptPreview.value = packet.markdown;
+      copyButton.textContent = 'Копировать весь prompt';
+      packageStatus.textContent = `Один файл готов: ${packet.post_count} новых постов и ${packet.context_count} связанных старых.`;
+      downloadText(file[0], file[1], file[2]);
+      setStatus('Единый файл готов. В нём уже есть промпт и инструкция по формату ответа.', 'success');
+      return;
+    }
+
     if (!('packet' in response)) {
-      setStatus('Сервис расширения вернул неожиданный ответ.', 'error');
+      setStatus('Расширение вернуло неожиданный ответ.', 'error');
       return;
     }
     const chunks = response.packet.chunks;
@@ -290,6 +359,7 @@ async function createPackage(): Promise<void> {
       setStatus('Пакет не содержит частей для анализа.', 'error');
       return;
     }
+    copyButton.textContent = chunks.length === 1 ? 'Копировать весь prompt' : 'Копировать первую часть';
     promptPreview.value =
       chunks.length === 1
         ? firstChunk.prompt_md
@@ -316,7 +386,7 @@ async function createPackage(): Promise<void> {
     downloadBytes('package.zip', archive, 'application/zip');
     setStatus(
       chunks.length === 1
-        ? 'Пакет готов. Вставьте prompt в онлайн-ИИ вручную; ответ затем вставьте обратно в расширение.'
+        ? 'Пакет готов. Можно использовать prompt из первой части или выбрать единый файл.'
         : 'Пакет готов. Отправьте ИИ prompts по очереди, затем вставьте ответы в combine-prompt.md и попросите ИИ сделать итоговую сводку.',
       'success',
     );
@@ -455,7 +525,8 @@ $('#resetButton').addEventListener('click', () => void resetCurrentSource());
 $('#checkpointButton').addEventListener('click', () => void collect('checkpoint'));
 $('#historyButton').addEventListener('click', () => void collect('history'));
 $('#collectButton').addEventListener('click', () => void collect('new'));
-$('#packageButton').addEventListener('click', () => void createPackage());
+$('#packageButton').addEventListener('click', () => void createPackage('single'));
+splitPackageButton.addEventListener('click', () => void createPackage('split'));
 $('#exportButton').addEventListener('click', () => void exportLocal());
 localSearchButton.addEventListener('click', () => void searchLocal());
 localSearch.addEventListener('keydown', (event) => {
@@ -465,6 +536,10 @@ $('#importButton').addEventListener('click', () => void importResponse());
 $('#refreshButton').addEventListener('click', () => void refresh());
 $('#settingsButton').addEventListener('click', () => void send({ type: 'open-options' }));
 $('#settingsTextButton').addEventListener('click', () => void send({ type: 'open-options' }));
+sourceSelect.addEventListener('change', () => {
+  openSourceButton.disabled = !sourceSelect.value;
+});
+openSourceButton.addEventListener('click', () => void openSelectedSource());
 $('#copyButton').addEventListener('click', async () => {
   if (!promptPreview.value) return;
   await navigator.clipboard.writeText(promptPreview.value);
@@ -473,10 +548,10 @@ $('#copyButton').addEventListener('click', async () => {
 
 void (async () => {
   try {
+    versionInfo.textContent = `Версия ${chrome.runtime.getManifest().version}`;
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     activeUrl = tabs[0]?.url || '';
     currentUrl.textContent = activeUrl || 'Не удалось определить URL активной вкладки.';
-    const copyButton = $('#copyButton') as HTMLButtonElement;
     copyButton.disabled = !activeUrl;
     await refresh();
   } catch (error) {

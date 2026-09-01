@@ -10,7 +10,7 @@ import {
   unknownPosts,
 } from '../src/core/collection';
 import { importAiResponse, validateAiResponse } from '../src/core/importer';
-import { createAiPacket, createAiPacketBundle } from '../src/core/prompt';
+import { createAiPacket, createAiPacketBundle, createSingleAiPacket } from '../src/core/prompt';
 import type { ForumPost } from '../src/core/types';
 import { postKey } from '../src/core/utils';
 
@@ -167,12 +167,21 @@ describe('AI packet', () => {
     expect(packet.prompt_md).toContain('не считать новыми');
   });
 
+  it('создаёт единый файл с инструкцией и структурированными постами', () => {
+    const packet = createSingleAiPacket([post('1', 'текст')]);
+    expect(packet.markdown).toContain('Формат ответа');
+    expect(packet.json).toContain('"instructions"');
+    expect(packet.json).toContain('текст');
+    expect(packet.text).toContain('Текст:');
+  });
+
   it('разбивает большой пакет на части и создаёт prompt для объединения', () => {
     const posts = Array.from({ length: 3 }, (_, index) => post(String(index + 1), 'текст '.repeat(1500)));
     const bundle = createAiPacketBundle(posts, [], 10_000, 'packet_test');
     expect(bundle.part_count).toBe(3);
     expect(bundle.chunks[0]?.prompt_md).toContain('часть 1 из 3');
     expect(bundle.combine_prompt_md).toContain('Ответ части 3 из 3');
+    expect(bundle.full_text).toContain('Новые сообщения:');
   });
 });
 

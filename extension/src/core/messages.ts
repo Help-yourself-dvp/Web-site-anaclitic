@@ -1,5 +1,6 @@
 import type {
   AiQaEntry,
+  BackgroundCheckState,
   CollectionResult,
   ExtensionSettings,
   ForumPost,
@@ -11,7 +12,7 @@ import type {
 export type BackgroundRequest =
   | { type: 'get-state'; url: string }
   | { type: 'collect'; mode: 'checkpoint' | 'history' | 'new'; url: string; maxPages?: number }
-  | { type: 'create-package' }
+  | { type: 'create-package'; mode: 'single' | 'split' }
   | { type: 'export-local' }
   | { type: 'reset-source'; url: string }
   | { type: 'clean-service-posts'; url: string }
@@ -21,7 +22,8 @@ export type BackgroundRequest =
   | { type: 'get-settings' }
   | { type: 'save-settings'; settings: ExtensionSettings }
   | { type: 'test-companion' }
-  | { type: 'open-options' };
+  | { type: 'open-options' }
+  | { type: 'open-source'; sourceId: string };
 
 export interface PacketChunkResponse {
   packet_id: string;
@@ -45,11 +47,21 @@ export interface PacketResponse {
   chunks: PacketChunkResponse[];
 }
 
+export interface SinglePacketResponse {
+  markdown: string;
+  json: string;
+  text: string;
+  post_count: number;
+  context_count: number;
+}
+
 export interface ExtensionState {
   currentSource: SourceRecord | null;
+  sources: SourceRecord[];
   recentPosts: ForumPost[];
   recentPostCount: number;
   recentReports: ReportRecord[];
+  backgroundCheck: BackgroundCheckState | null;
   lastRunAt: string | null;
   hasCheckpoint: boolean;
   settings: ExtensionSettings;
@@ -59,6 +71,7 @@ export type BackgroundResponse =
   | { ok: true; state: ExtensionState }
   | { ok: true; collection: CollectionResult }
   | { ok: true; packet: PacketResponse }
+  | { ok: true; singlePacket: SinglePacketResponse }
   | { ok: true; exportData: { json: string; markdown: string } }
   | { ok: true; diagnostic: { json: string; markdown: string } }
   | { ok: true; search: { posts: ForumPost[]; reports: ReportRecord[]; qa: AiQaEntry[] } }

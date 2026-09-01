@@ -211,9 +211,25 @@ export interface StoredRun {
   run: CollectionRun;
 }
 
+export type BackgroundProbeStatus = 'new-likely' | 'no-change' | 'blocked' | 'error' | 'not-configured';
+
+export interface BackgroundProbeItem {
+  source_id: string;
+  title: string;
+  status: BackgroundProbeStatus;
+  message: string;
+  checked_at: string;
+}
+
+export interface BackgroundCheckState {
+  checked_at: string;
+  items: BackgroundProbeItem[];
+}
+
 export interface ExtensionSettings {
   companionUrl: string;
   adapterName: AdapterName;
+  backgroundCheckEnabled: boolean;
   maxPages: number;
   delayMs: number;
   imageMode: ImageMode;
@@ -224,6 +240,7 @@ export interface ExtensionSettings {
 export const DEFAULT_EXTENSION_SETTINGS: ExtensionSettings = {
   companionUrl: 'http://127.0.0.1:8765',
   adapterName: 'auto',
+  backgroundCheckEnabled: false,
   maxPages: 50,
   delayMs: 1200,
   imageMode: 'links',

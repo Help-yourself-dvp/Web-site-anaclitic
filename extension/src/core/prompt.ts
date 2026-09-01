@@ -146,6 +146,39 @@ function createManifest(posts: ForumPost[], contextPosts: ForumPost[], extra: Re
   );
 }
 
+export interface SingleAiPacket {
+  markdown: string;
+  json: string;
+  text: string;
+  post_count: number;
+  context_count: number;
+}
+
+export function createSingleAiPacket(postsInput: ForumPost[], contextPostsInput: ForumPost[] = []): SingleAiPacket {
+  const packet = createAiPacket(postsInput, contextPostsInput);
+  const links = JSON.parse(packet.links_json) as unknown;
+  const json = JSON.stringify(
+    {
+      format: 'forum-knowledge-base-single-ai-file',
+      format_version: '1.0',
+      instructions: packet.prompt_md,
+      posts: packet.posts,
+      context_posts: packet.context_posts,
+      links,
+      note: 'Поле instructions содержит полный промпт. Этот файл предназначен для загрузки в ИИ, а не для восстановления базы.',
+    },
+    null,
+    2,
+  );
+  return {
+    markdown: packet.prompt_md,
+    json,
+    text: packet.prompt_md,
+    post_count: packet.posts.length,
+    context_count: packet.context_posts.length,
+  };
+}
+
 export function createAiPacket(postsInput: ForumPost[], contextPostsInput: ForumPost[] = []): AiPacket {
   const posts = sortPostsChronologically(postsInput);
   const contextPosts = sortPostsChronologically(contextPostsInput).filter(
