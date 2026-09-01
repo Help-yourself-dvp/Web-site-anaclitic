@@ -180,6 +180,120 @@ def _find_json_object(raw: str) -> str | None:
     return None
 
 
+def _extract_human_summary(raw: str, json_text: str | None) -> str:
+    marker = re.search(r"(^|\n)\s*---MARKDOWN---\s*(?:\n|$)", raw, re.I)
+    if marker:
+        return raw[marker.end() :].strip()
+    if json_text:
+        after_json = raw[(raw.find(json_text) + len(json_text)) :].strip()
+        if after_json:
+            return after_json
+    return ""
+
+
+def _repair_missing_fields(value: Any, human_summary: str) -> tuple[Any, list[str]]:
+    if not isinstance(value, dict):
+        return value, []
+    root = dict(value)
+    warnings: list[str] = []
+
+    def note(path: str) -> None:
+        if len(warnings) < 30:
+            warnings.append(f"Автоматически добавлено поле {path}.")
+
+    if "schema_version" not in root:
+        root["schema_version"] = "1.0"
+        note("schema_version")
+    if "markdown_summary" not in root:
+        report_value = root.get("report")
+        root["markdown_summary"] = human_summary or (report_value.get("overview", "") if isinstance(report_value, dict) else "")
+        note("markdown_summary")
+    if root.get("markdown_summary") == "" and isinstance(root.get("summary"), str):
+        root["markdown_summary"] = root.pop("summary")
+        note("markdown_summary (из summary)")
+    if not isinstance(root.get("report"), dict):
+        return root, warnings
+    report = dict(root["report"])
+    root["report"] = report
+    for field in ("title", "overview"):
+        if field not in report:
+            report[field] = ""
+            note(f"report.{field}")
+    period = report.get("period")
+    if not isinstance(period, dict):
+        report["period"] = {"from": None, "to": None}
+        if period is None:
+            note("report.period")
+    else:
+        period = dict(period)
+        if "from" not in period:
+            period["from"] = None
+            note("report.period.from")
+        if "to" not in period:
+            period["to"] = None
+            note("report.period.to")
+        report["period"] = period
+    for section in SECTIONS:
+        if section not in report:
+            report[section] = []
+            note(f"report.{section}")
+            continue
+        if not isinstance(report[section], list):
+            continue
+        fixed_items = []
+        for item in report[section]:
+            if not isinstance(item, dict):
+                fixed_items.append(item)
+                continue
+            fixed = dict(item)
+            defaults = (("title", ""), ("details", ""), ("status", "unconfirmed"), ("source_post_urls", []), ("external_urls", []))
+            for field, fallback in defaults:
+                if field not in fixed:
+                    fixed[field] = fallback
+                    note(f"report.{section}[].{field}")
+            fixed_items.append(fixed)
+        report[section] = fixed_items
+    if "links" not in report:
+        report["links"] = []
+        note("report.links")
+    elif isinstance(report["links"], list):
+        fixed_links = []
+        for item in report["links"]:
+            if not isinstance(item, dict):
+                fixed_links.append(item)
+                continue
+            fixed = dict(item)
+            for field, fallback in (("url", ""), ("annotation", ""), ("source_post_urls", [])):
+                if field not in fixed:
+                    fixed[field] = fallback
+                    note(f"report.links[].{field}")
+            fixed_links.append(fixed)
+        report["links"] = fixed_links
+    for field in ("things_to_check", "qa", "conflicts"):
+        if field not in report:
+            report[field] = []
+            note(f"report.{field}")
+    if isinstance(report.get("qa"), list):
+        fixed_qa = []
+        defaults = (
+            ("question", ""), ("short_answer", ""), ("detailed_answer", ""), ("status", "unconfirmed"),
+            ("tags", []), ("device_topic", ""), ("source_post_urls", []), ("external_urls", []),
+            ("first_seen_at", None), ("updated_at", None), ("confidence_note", ""),
+        )
+        for item in report["qa"]:
+            if not isinstance(item, dict):
+                fixed_qa.append(item)
+                continue
+            fixed = dict(item)
+            for field, fallback in defaults:
+                if field not in fixed:
+                    fixed[field] = fallback
+                    note(f"report.qa[].{field}")
+            fixed_qa.append(fixed)
+        report["qa"] = fixed_qa
+    return root, warnings
+
+
 def _markdown_qa(raw: str) -> tuple[list[dict[str, Any]], list[str]]:
     entries: list[dict[str, Any]] = []
     unrecognized: list[str] = []
@@ -234,7 +348,9 @@ def import_ai_response(raw: str, source_id: str = "manual-import", topic_id: str
     warnings: list[str] = []
     payload: dict[str, Any] | None = None
     valid_json = False
+    repaired_json = False
     json_text = _find_json_object(raw)
+    human_summary = _extract_human_summary(raw, json_text)
     if json_text:
         try:
             parsed = json.loads(json_text)
@@ -243,25 +359,36 @@ def import_ai_response(raw: str, source_id: str = "manual-import", topic_id: str
                 payload = validation.value
                 valid_json = True
             else:
-                warnings.append("JSON найден, но не прошёл строгую проверку. Сохранена обычная Markdown-сводка.")
-                warnings.extend(validation.errors[:10])
+                repaired, repair_warnings = _repair_missing_fields(parsed, human_summary)
+                repaired_validation = validate_ai_response(repaired)
+                if repaired_validation.valid and repaired_validation.value:
+                    payload = repaired_validation.value
+                    valid_json = True
+                    repaired_json = bool(repair_warnings)
+                    warnings.append("JSON принят после безопасного добавления отсутствующих необязательных полей.")
+                    warnings.extend(repair_warnings[:10])
+                else:
+                    warnings.append("JSON найден, но не прошёл строгую проверку. Сохранена обычная Markdown-сводка.")
+                    warnings.extend(validation.errors[:10])
         except json.JSONDecodeError as exc:
             warnings.append(f"JSON найден, но повреждён: {exc}")
     else:
         warnings.append("В ответе не найден JSON-блок; импортирован как Markdown.")
-    markdown_entries, unrecognized = _markdown_qa(raw)
+    markdown_entries, unrecognized = _markdown_qa(human_summary or raw)
     if payload is None:
         payload = {
             "schema_version": "1.0",
             "report": {
                 "title": "Импортированная Markdown-сводка", "period": {"from": None, "to": None},
-                "overview": raw, "important_news": [], "confirmed_decisions": [], "bugs_and_problems": [],
+                "overview": human_summary or raw, "important_news": [], "confirmed_decisions": [], "bugs_and_problems": [],
                 "rumors": [], "links": [], "things_to_check": [], "qa": markdown_entries, "conflicts": [],
             },
-            "markdown_summary": raw,
+            "markdown_summary": human_summary or raw,
         }
-    elif not payload["report"]["qa"] and markdown_entries and not valid_json:
+    elif not payload["report"]["qa"] and markdown_entries:
         payload["report"]["qa"] = markdown_entries
+        if valid_json:
+            warnings.append("Q&A добавлены из отдельной Markdown-сводки.")
     report_id = f"report_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
     qa_entries = [{**entry, "related_report_id": report_id} for entry in payload["report"]["qa"]]
     report = {
@@ -271,9 +398,9 @@ def import_ai_response(raw: str, source_id: str = "manual-import", topic_id: str
         "period_from": payload["report"]["period"]["from"],
         "period_to": payload["report"]["period"]["to"],
         "raw_ai_response": raw,
-        "parsed_summary": payload["report"]["overview"] or payload["markdown_summary"],
+        "parsed_summary": human_summary or payload["markdown_summary"] or payload["report"]["overview"],
         "structured_facts": payload["report"],
         "qa_entries": qa_entries,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    return ImportResult(report, valid_json, warnings, [] if valid_json else unrecognized)
+    return ImportResult(report, valid_json, warnings, [] if valid_json else unrecognized, repaired_json)

@@ -237,6 +237,163 @@ function findJsonObject(raw: string): string | null {
   return null;
 }
 
+function extractHumanSummary(raw: string, jsonText: string | null): string {
+  const marker = raw.match(/(^|\n)\s*---MARKDOWN---\s*(?:\n|$)/i);
+  if (marker && marker.index !== undefined) return raw.slice(marker.index + marker[0].length).trim();
+  if (jsonText) {
+    const afterJson = raw.slice((raw.indexOf(jsonText) || 0) + jsonText.length).trim();
+    if (afterJson) return afterJson;
+  }
+  return '';
+}
+
+function repairMissingFields(input: unknown, humanSummary: string): { value: unknown; warnings: string[] } {
+  if (!isRecord(input)) return { value: input, warnings: [] };
+  const root: RecordValue = { ...input };
+  const warnings: string[] = [];
+  const note = (path: string) => {
+    if (warnings.length < 30) warnings.push(`Автоматически добавлено поле ${path}.`);
+  };
+  if (root.schema_version === undefined) {
+    root.schema_version = '1.0';
+    note('schema_version');
+  }
+  if (root.markdown_summary === undefined) {
+    root.markdown_summary =
+      humanSummary || (isRecord(root.report) && typeof root.report.overview === 'string' ? root.report.overview : '');
+    note('markdown_summary');
+  }
+  // A few models call the human-readable part simply summary. Convert only
+  // this known alias; unrelated unknown fields still fail strict validation.
+  if (root.markdown_summary === '' && typeof root.summary === 'string') {
+    root.markdown_summary = root.summary;
+    delete root.summary;
+    note('markdown_summary (из summary)');
+  }
+  if (!isRecord(root.report)) return { value: root, warnings };
+  const report: RecordValue = { ...root.report };
+  root.report = report;
+  const reportTextDefaults: Array<[string, string]> = [
+    ['title', ''],
+    ['overview', ''],
+  ];
+  reportTextDefaults.forEach(([field, fallback]) => {
+    if (report[field] === undefined) {
+      report[field] = fallback;
+      note(`report.${field}`);
+    }
+  });
+  const periodValue = report.period;
+  if (!isRecord(periodValue)) {
+    if (periodValue === undefined) note('report.period');
+    report.period = { from: null, to: null };
+  } else {
+    const period = { ...periodValue };
+    if (period.from === undefined) {
+      period.from = null;
+      note('report.period.from');
+    }
+    if (period.to === undefined) {
+      period.to = null;
+      note('report.period.to');
+    }
+    report.period = period;
+  }
+  for (const section of SECTION_NAMES) {
+    if (report[section] === undefined) {
+      report[section] = [];
+      note(`report.${section}`);
+      continue;
+    }
+    if (!Array.isArray(report[section])) continue;
+    report[section] = report[section].map((item) => {
+      if (!isRecord(item)) return item;
+      const fixed: RecordValue = { ...item };
+      if (fixed.title === undefined) {
+        fixed.title = '';
+        note(`report.${section}[].title`);
+      }
+      if (fixed.details === undefined) {
+        fixed.details = '';
+        note(`report.${section}[].details`);
+      }
+      if (fixed.status === undefined) {
+        fixed.status = 'unconfirmed';
+        note(`report.${section}[].status`);
+      }
+      if (fixed.source_post_urls === undefined) {
+        fixed.source_post_urls = [];
+        note(`report.${section}[].source_post_urls`);
+      }
+      if (fixed.external_urls === undefined) {
+        fixed.external_urls = [];
+        note(`report.${section}[].external_urls`);
+      }
+      return fixed;
+    });
+  }
+  if (report.links === undefined) {
+    report.links = [];
+    note('report.links');
+  } else if (Array.isArray(report.links)) {
+    report.links = report.links.map((item) => {
+      if (!isRecord(item)) return item;
+      const fixed: RecordValue = { ...item };
+      if (fixed.url === undefined) {
+        fixed.url = '';
+        note('report.links[].url');
+      }
+      if (fixed.annotation === undefined) {
+        fixed.annotation = '';
+        note('report.links[].annotation');
+      }
+      if (fixed.source_post_urls === undefined) {
+        fixed.source_post_urls = [];
+        note('report.links[].source_post_urls');
+      }
+      return fixed;
+    });
+  }
+  if (report.things_to_check === undefined) {
+    report.things_to_check = [];
+    note('report.things_to_check');
+  }
+  if (report.qa === undefined) {
+    report.qa = [];
+    note('report.qa');
+  } else if (Array.isArray(report.qa)) {
+    report.qa = report.qa.map((item) => {
+      if (!isRecord(item)) return item;
+      const fixed: RecordValue = { ...item };
+      const defaults: Array<[string, unknown]> = [
+        ['question', ''],
+        ['short_answer', ''],
+        ['detailed_answer', ''],
+        ['status', 'unconfirmed'],
+        ['tags', []],
+        ['device_topic', ''],
+        ['source_post_urls', []],
+        ['external_urls', []],
+        ['first_seen_at', null],
+        ['updated_at', null],
+        ['confidence_note', ''],
+      ];
+      defaults.forEach(([field, fallback]) => {
+        if (fixed[field] === undefined) {
+          fixed[field] = fallback;
+          note(`report.qa[].${field}`);
+        }
+      });
+      return fixed;
+    });
+  }
+  if (report.conflicts === undefined) {
+    report.conflicts = [];
+    note('report.conflicts');
+  }
+  return { value: root, warnings };
+}
+
 function markdownQa(raw: string): { entries: AiQaEntry[]; unrecognized: string[] } {
   const entries: AiQaEntry[] = [];
   const unrecognized: string[] = [];
@@ -312,16 +469,28 @@ export function importAiResponse(raw: string, sourceId: string, topicId: string)
   let payload: AiResponsePayload | null = null;
   let validJson = false;
   const jsonText = findJsonObject(text);
+  const humanSummary = extractHumanSummary(text, jsonText);
+  let repairedJson = false;
   if (jsonText) {
     try {
       const parsed: unknown = JSON.parse(jsonText);
       const validation = validateAiResponse(parsed);
-      if (validation.valid && validation.value) {
+      if (!validation.valid) {
+        const repaired = repairMissingFields(parsed, humanSummary);
+        const repairedValidation = validateAiResponse(repaired.value);
+        if (repairedValidation.valid && repairedValidation.value) {
+          payload = repairedValidation.value;
+          validJson = true;
+          repairedJson = repaired.warnings.length > 0;
+          warnings.push('JSON принят после безопасного добавления отсутствующих необязательных полей.');
+          warnings.push(...repaired.warnings.slice(0, 10));
+        } else {
+          warnings.push('JSON найден, но не прошёл строгую проверку. Сохранена обычная Markdown-сводка.');
+          warnings.push(...validation.errors.slice(0, 10));
+        }
+      } else if (validation.value) {
         payload = validation.value;
         validJson = true;
-      } else {
-        warnings.push('JSON найден, но не прошёл строгую проверку. Сохранена обычная Markdown-сводка.');
-        warnings.push(...validation.errors.slice(0, 10));
       }
     } catch (error) {
       warnings.push(`JSON найден, но повреждён: ${error instanceof Error ? error.message : String(error)}`);
@@ -330,9 +499,13 @@ export function importAiResponse(raw: string, sourceId: string, topicId: string)
     warnings.push('В ответе не найден JSON-блок; импортирован как Markdown.');
   }
 
-  const markdown = markdownQa(text);
-  if (!payload) payload = fallbackPayload(text, markdown.entries);
-  if (payload.report.qa.length === 0 && markdown.entries.length > 0 && !validJson) payload.report.qa = markdown.entries;
+  const markdown = markdownQa(humanSummary || text);
+  const summaryForStorage = humanSummary || '';
+  if (!payload) payload = fallbackPayload(summaryForStorage || text, markdown.entries);
+  if (payload.report.qa.length === 0 && markdown.entries.length > 0) {
+    payload.report.qa = markdown.entries;
+    if (validJson) warnings.push('Q&A добавлены из отдельной Markdown-сводки.');
+  }
   const reportId = makeId('report');
   const qaEntries = payload.report.qa.map((entry) => ({ ...entry, related_report_id: reportId }));
   const report: ReportRecord = {
@@ -342,7 +515,7 @@ export function importAiResponse(raw: string, sourceId: string, topicId: string)
     period_from: payload.report.period.from,
     period_to: payload.report.period.to,
     raw_ai_response: raw,
-    parsed_summary: payload.report.overview || payload.markdown_summary,
+    parsed_summary: summaryForStorage || payload.markdown_summary || payload.report.overview,
     structured_facts: payload.report,
     qa_entries: qaEntries,
     created_at: nowIso(),
@@ -350,6 +523,7 @@ export function importAiResponse(raw: string, sourceId: string, topicId: string)
   return {
     report,
     valid_json: validJson,
+    repaired_json: repairedJson,
     warnings,
     unrecognized_qa: validJson ? [] : markdown.unrecognized,
   };

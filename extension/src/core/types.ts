@@ -203,6 +203,7 @@ export interface ReportRecord {
 export interface ImportResult {
   report: ReportRecord;
   valid_json: boolean;
+  repaired_json: boolean;
   warnings: string[];
   unrecognized_qa: string[];
 }

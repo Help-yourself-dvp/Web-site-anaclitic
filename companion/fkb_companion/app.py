@@ -94,6 +94,7 @@ def import_report(request: RawReportRequest) -> dict[str, Any]:
         "ok": True,
         "report": result.report,
         "valid_json": result.valid_json,
+        "repaired_json": result.repaired_json,
         "warnings": result.warnings,
         "unrecognized_qa": result.unrecognized_qa,
     }

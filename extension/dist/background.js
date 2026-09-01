@@ -1194,7 +1194,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     "qa": [{"question": "", "short_answer": "", "detailed_answer": "", "status": "confirmed|probable|unconfirmed|outdated|conflicting", "tags": [], "device_topic": "", "source_post_urls": [], "external_urls": [], "first_seen_at": null, "updated_at": null, "confidence_note": ""}],
     "conflicts": []
   },
-  "markdown_summary": "\u0442\u0430 \u0436\u0435 \u0441\u0432\u043E\u0434\u043A\u0430 \u0432 Markdown"
+  "markdown_summary": "\u043F\u043E\u043B\u043D\u0430\u044F \u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F \u0441\u0432\u043E\u0434\u043A\u0430 \u0434\u043B\u044F \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430: \u0432\u0430\u0436\u043D\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0441\u043B\u0443\u0445\u0438, \u0441\u0441\u044B\u043B\u043A\u0438, \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0438 Q&A"
 }`;
     const partHeader = meta.partCount ? [
       `## \u042D\u0442\u043E \u0447\u0430\u0441\u0442\u044C ${meta.partNumber || 1} \u0438\u0437 ${meta.partCount} \u043E\u0434\u043D\u043E\u0433\u043E \u043F\u0430\u043A\u0435\u0442\u0430`,
@@ -1218,7 +1218,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       "6. \u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043E\u0442\u0432\u0435\u0442\u043E\u043C \u043D\u0430 \u0446\u0438\u0442\u0430\u0442\u0443 \u0438\u043B\u0438 \u0434\u0440\u0443\u0433\u043E\u0439 \u043F\u043E\u0441\u0442. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u043F\u043E\u043B\u044F \xAB\u0426\u0438\u0442\u0430\u0442\u044B\xBB \u0438 \xAB\u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\xBB, \u0441\u0432\u044F\u0436\u0438 \u043E\u0442\u0432\u0435\u0442 \u0441 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u043C \u043F\u043E\u0441\u0442\u043E\u043C, \u043D\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u0439 \u0446\u0438\u0442\u0430\u0442\u0443 \u043A\u0430\u043A \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E. \u0415\u0441\u043B\u0438 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A \u043D\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D \u2014 \u0443\u043A\u0430\u0436\u0438, \u0447\u0442\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043D\u0435\u043F\u043E\u043B\u043D\u044B\u0439.",
       "",
       "## \u0424\u043E\u0440\u043C\u0430\u0442 \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D",
-      "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0432\u0435\u0434\u0438 \u043E\u0434\u0438\u043D \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u0441\u0445\u0435\u043C\u0435 \u043D\u0438\u0436\u0435. \u0417\u0430\u0442\u0435\u043C \u043F\u043E\u0441\u043B\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 `---MARKDOWN---` \u0432\u044B\u0432\u0435\u0434\u0438 \u0443\u0434\u043E\u0431\u043D\u0443\u044E Markdown-\u0441\u0432\u043E\u0434\u043A\u0443. \u0412\u0441\u0435 \u043C\u0430\u0441\u0441\u0438\u0432\u044B \u0434\u043E\u043B\u0436\u043D\u044B \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C, \u0434\u0430\u0436\u0435 \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u0443\u0441\u0442\u044B\u0435. \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0432 JSON \u043F\u043E\u043B\u044F \u0441 \u0434\u043E\u0433\u0430\u0434\u043A\u0430\u043C\u0438 \u0431\u0435\u0437 \u043F\u043E\u043C\u0435\u0442\u043A\u0438 \u0441\u0442\u0430\u0442\u0443\u0441\u0430.",
+      "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0432\u0435\u0434\u0438 \u043E\u0434\u0438\u043D \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u0441\u0445\u0435\u043C\u0435 \u043D\u0438\u0436\u0435. \u0417\u0430\u0442\u0435\u043C \u043F\u043E\u0441\u043B\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 `---MARKDOWN---` \u0432\u044B\u0432\u0435\u0434\u0438 \u043F\u043E\u043B\u043D\u0443\u044E \u0447\u0438\u0442\u0430\u0435\u043C\u0443\u044E Markdown-\u0441\u0432\u043E\u0434\u043A\u0443 \u0434\u043B\u044F \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430. Markdown \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0434\u043D\u043E\u0439 \u043A\u043E\u0440\u043E\u0442\u043A\u043E\u0439 \u0444\u0440\u0430\u0437\u043E\u0439: \u043F\u043E\u0432\u0442\u043E\u0440\u0438 \u0432 \u043D\u0451\u043C \u0432\u0430\u0436\u043D\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0441\u043B\u0443\u0445\u0438, \u0441\u0441\u044B\u043B\u043A\u0438, \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0438 Q&A. \u0412\u0441\u0435 \u043C\u0430\u0441\u0441\u0438\u0432\u044B \u0434\u043E\u043B\u0436\u043D\u044B \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C, \u0434\u0430\u0436\u0435 \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u0443\u0441\u0442\u044B\u0435. \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0432 JSON \u043F\u043E\u043B\u044F \u0441 \u0434\u043E\u0433\u0430\u0434\u043A\u0430\u043C\u0438 \u0431\u0435\u0437 \u043F\u043E\u043C\u0435\u0442\u043A\u0438 \u0441\u0442\u0430\u0442\u0443\u0441\u0430.",
       "\u0421\u0445\u0435\u043C\u0430 (\u044D\u043A\u0432\u0438\u0432\u0430\u043B\u0435\u043D\u0442\u043D\u0430\u044F \u0441\u0442\u0440\u043E\u0433\u0430\u044F JSON Schema):",
       "```json",
       responseSchema,
@@ -1618,6 +1618,158 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     }
     return null;
   }
+  function extractHumanSummary(raw, jsonText) {
+    const marker = raw.match(/(^|\n)\s*---MARKDOWN---\s*(?:\n|$)/i);
+    if (marker && marker.index !== void 0) return raw.slice(marker.index + marker[0].length).trim();
+    if (jsonText) {
+      const afterJson = raw.slice((raw.indexOf(jsonText) || 0) + jsonText.length).trim();
+      if (afterJson) return afterJson;
+    }
+    return "";
+  }
+  function repairMissingFields(input, humanSummary) {
+    if (!isRecord(input)) return { value: input, warnings: [] };
+    const root = { ...input };
+    const warnings = [];
+    const note = (path) => {
+      if (warnings.length < 30) warnings.push(`\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \u043F\u043E\u043B\u0435 ${path}.`);
+    };
+    if (root.schema_version === void 0) {
+      root.schema_version = "1.0";
+      note("schema_version");
+    }
+    if (root.markdown_summary === void 0) {
+      root.markdown_summary = humanSummary || (isRecord(root.report) && typeof root.report.overview === "string" ? root.report.overview : "");
+      note("markdown_summary");
+    }
+    if (root.markdown_summary === "" && typeof root.summary === "string") {
+      root.markdown_summary = root.summary;
+      delete root.summary;
+      note("markdown_summary (\u0438\u0437 summary)");
+    }
+    if (!isRecord(root.report)) return { value: root, warnings };
+    const report = { ...root.report };
+    root.report = report;
+    const reportTextDefaults = [
+      ["title", ""],
+      ["overview", ""]
+    ];
+    reportTextDefaults.forEach(([field, fallback]) => {
+      if (report[field] === void 0) {
+        report[field] = fallback;
+        note(`report.${field}`);
+      }
+    });
+    const periodValue = report.period;
+    if (!isRecord(periodValue)) {
+      if (periodValue === void 0) note("report.period");
+      report.period = { from: null, to: null };
+    } else {
+      const period = { ...periodValue };
+      if (period.from === void 0) {
+        period.from = null;
+        note("report.period.from");
+      }
+      if (period.to === void 0) {
+        period.to = null;
+        note("report.period.to");
+      }
+      report.period = period;
+    }
+    for (const section of SECTION_NAMES) {
+      if (report[section] === void 0) {
+        report[section] = [];
+        note(`report.${section}`);
+        continue;
+      }
+      if (!Array.isArray(report[section])) continue;
+      report[section] = report[section].map((item) => {
+        if (!isRecord(item)) return item;
+        const fixed = { ...item };
+        if (fixed.title === void 0) {
+          fixed.title = "";
+          note(`report.${section}[].title`);
+        }
+        if (fixed.details === void 0) {
+          fixed.details = "";
+          note(`report.${section}[].details`);
+        }
+        if (fixed.status === void 0) {
+          fixed.status = "unconfirmed";
+          note(`report.${section}[].status`);
+        }
+        if (fixed.source_post_urls === void 0) {
+          fixed.source_post_urls = [];
+          note(`report.${section}[].source_post_urls`);
+        }
+        if (fixed.external_urls === void 0) {
+          fixed.external_urls = [];
+          note(`report.${section}[].external_urls`);
+        }
+        return fixed;
+      });
+    }
+    if (report.links === void 0) {
+      report.links = [];
+      note("report.links");
+    } else if (Array.isArray(report.links)) {
+      report.links = report.links.map((item) => {
+        if (!isRecord(item)) return item;
+        const fixed = { ...item };
+        if (fixed.url === void 0) {
+          fixed.url = "";
+          note("report.links[].url");
+        }
+        if (fixed.annotation === void 0) {
+          fixed.annotation = "";
+          note("report.links[].annotation");
+        }
+        if (fixed.source_post_urls === void 0) {
+          fixed.source_post_urls = [];
+          note("report.links[].source_post_urls");
+        }
+        return fixed;
+      });
+    }
+    if (report.things_to_check === void 0) {
+      report.things_to_check = [];
+      note("report.things_to_check");
+    }
+    if (report.qa === void 0) {
+      report.qa = [];
+      note("report.qa");
+    } else if (Array.isArray(report.qa)) {
+      report.qa = report.qa.map((item) => {
+        if (!isRecord(item)) return item;
+        const fixed = { ...item };
+        const defaults = [
+          ["question", ""],
+          ["short_answer", ""],
+          ["detailed_answer", ""],
+          ["status", "unconfirmed"],
+          ["tags", []],
+          ["device_topic", ""],
+          ["source_post_urls", []],
+          ["external_urls", []],
+          ["first_seen_at", null],
+          ["updated_at", null],
+          ["confidence_note", ""]
+        ];
+        defaults.forEach(([field, fallback]) => {
+          if (fixed[field] === void 0) {
+            fixed[field] = fallback;
+            note(`report.qa[].${field}`);
+          }
+        });
+        return fixed;
+      });
+    }
+    if (report.conflicts === void 0) {
+      report.conflicts = [];
+      note("report.conflicts");
+    }
+    return { value: root, warnings };
+  }
   function markdownQa(raw) {
     const entries = [];
     const unrecognized = [];
@@ -1691,16 +1843,28 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     let payload = null;
     let validJson = false;
     const jsonText = findJsonObject(text);
+    const humanSummary = extractHumanSummary(text, jsonText);
+    let repairedJson = false;
     if (jsonText) {
       try {
         const parsed = JSON.parse(jsonText);
         const validation = validateAiResponse(parsed);
-        if (validation.valid && validation.value) {
+        if (!validation.valid) {
+          const repaired = repairMissingFields(parsed, humanSummary);
+          const repairedValidation = validateAiResponse(repaired.value);
+          if (repairedValidation.valid && repairedValidation.value) {
+            payload = repairedValidation.value;
+            validJson = true;
+            repairedJson = repaired.warnings.length > 0;
+            warnings.push("JSON \u043F\u0440\u0438\u043D\u044F\u0442 \u043F\u043E\u0441\u043B\u0435 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0433\u043E \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 \u043D\u0435\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0445 \u043F\u043E\u043B\u0435\u0439.");
+            warnings.push(...repaired.warnings.slice(0, 10));
+          } else {
+            warnings.push("JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043D\u0435 \u043F\u0440\u043E\u0448\u0451\u043B \u0441\u0442\u0440\u043E\u0433\u0443\u044E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443. \u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 \u043E\u0431\u044B\u0447\u043D\u0430\u044F Markdown-\u0441\u0432\u043E\u0434\u043A\u0430.");
+            warnings.push(...validation.errors.slice(0, 10));
+          }
+        } else if (validation.value) {
           payload = validation.value;
           validJson = true;
-        } else {
-          warnings.push("JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043D\u0435 \u043F\u0440\u043E\u0448\u0451\u043B \u0441\u0442\u0440\u043E\u0433\u0443\u044E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443. \u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 \u043E\u0431\u044B\u0447\u043D\u0430\u044F Markdown-\u0441\u0432\u043E\u0434\u043A\u0430.");
-          warnings.push(...validation.errors.slice(0, 10));
         }
       } catch (error) {
         warnings.push(`JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0451\u043D: ${error instanceof Error ? error.message : String(error)}`);
@@ -1708,9 +1872,13 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     } else {
       warnings.push("\u0412 \u043E\u0442\u0432\u0435\u0442\u0435 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D JSON-\u0431\u043B\u043E\u043A; \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D \u043A\u0430\u043A Markdown.");
     }
-    const markdown = markdownQa(text);
-    if (!payload) payload = fallbackPayload(text, markdown.entries);
-    if (payload.report.qa.length === 0 && markdown.entries.length > 0 && !validJson) payload.report.qa = markdown.entries;
+    const markdown = markdownQa(humanSummary || text);
+    const summaryForStorage = humanSummary || "";
+    if (!payload) payload = fallbackPayload(summaryForStorage || text, markdown.entries);
+    if (payload.report.qa.length === 0 && markdown.entries.length > 0) {
+      payload.report.qa = markdown.entries;
+      if (validJson) warnings.push("Q&A \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u044B \u0438\u0437 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 Markdown-\u0441\u0432\u043E\u0434\u043A\u0438.");
+    }
     const reportId = makeId("report");
     const qaEntries = payload.report.qa.map((entry) => ({ ...entry, related_report_id: reportId }));
     const report = {
@@ -1720,7 +1888,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       period_from: payload.report.period.from,
       period_to: payload.report.period.to,
       raw_ai_response: raw,
-      parsed_summary: payload.report.overview || payload.markdown_summary,
+      parsed_summary: summaryForStorage || payload.markdown_summary || payload.report.overview,
       structured_facts: payload.report,
       qa_entries: qaEntries,
       created_at: nowIso()
@@ -1728,6 +1896,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     return {
       report,
       valid_json: validJson,
+      repaired_json: repairedJson,
       warnings,
       unrecognized_qa: validJson ? [] : markdown.unrecognized
     };

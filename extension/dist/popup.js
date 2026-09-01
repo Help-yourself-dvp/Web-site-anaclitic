@@ -1176,7 +1176,7 @@ ${firstChunk.prompt_md}`;
       const result = response.importResult;
       importResult.replaceChildren();
       const summary = document.createElement("p");
-      summary.textContent = result.valid_json ? `\u0412\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. Q&A-\u043A\u0430\u0440\u0442\u043E\u0447\u0435\u043A: ${result.report.qa_entries.length}.` : `\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 Markdown-\u0441\u0432\u043E\u0434\u043A\u0430. \u0420\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u043E Q&A: ${result.report.qa_entries.length}.`;
+      summary.textContent = result.valid_json ? result.repaired_json ? `JSON \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D \u043F\u043E\u0441\u043B\u0435 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u0437\u0430\u043F\u043E\u043B\u043D\u0435\u043D\u0438\u044F \u043F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043D\u044B\u0445 \u043F\u043E\u043B\u0435\u0439. Q&A-\u043A\u0430\u0440\u0442\u043E\u0447\u0435\u043A: ${result.report.qa_entries.length}.` : `\u0412\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D. Q&A-\u043A\u0430\u0440\u0442\u043E\u0447\u0435\u043A: ${result.report.qa_entries.length}.` : `\u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 Markdown-\u0441\u0432\u043E\u0434\u043A\u0430. \u0420\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u043E Q&A: ${result.report.qa_entries.length}.`;
       importResult.append(summary);
       if (result.warnings.length || result.unrecognized_qa.length) {
         const list = document.createElement("ul");

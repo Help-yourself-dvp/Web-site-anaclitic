@@ -501,7 +501,9 @@ async function importResponse(): Promise<void> {
     importResult.replaceChildren();
     const summary = document.createElement('p');
     summary.textContent = result.valid_json
-      ? `Валидный JSON сохранён. Q&A-карточек: ${result.report.qa_entries.length}.`
+      ? result.repaired_json
+        ? `JSON сохранён после автоматического заполнения пропущенных полей. Q&A-карточек: ${result.report.qa_entries.length}.`
+        : `Валидный JSON сохранён. Q&A-карточек: ${result.report.qa_entries.length}.`
       : `Сохранена Markdown-сводка. Распознано Q&A: ${result.report.qa_entries.length}.`;
     importResult.append(summary);
     if (result.warnings.length || result.unrecognized_qa.length) {

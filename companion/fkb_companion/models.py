@@ -17,3 +17,4 @@ class ImportResult:
     valid_json: bool
     warnings: list[str]
     unrecognized_qa: list[str]
+    repaired_json: bool = False
