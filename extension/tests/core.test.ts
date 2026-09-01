@@ -250,6 +250,32 @@ describe('импорт ответа AI', () => {
     expect(result.warnings.length).toBeGreaterThan(0);
   });
 
+  it('исправляет null и одиночную строку в полях, где нужны статус и массив ссылок', () => {
+    const incomplete = {
+      ...valid,
+      report: {
+        ...valid.report,
+        conflicts: null,
+        confirmed_decisions: [
+          { title: 'Решение', details: 'Описание', status: null, source_post_urls: [], external_urls: null },
+        ],
+        bugs_and_problems: [
+          { title: 'Проблема', details: 'Описание', status: 'probable', external_urls: 'https://example.test' },
+        ],
+      },
+    };
+    const result = importAiResponse(
+      `${JSON.stringify(incomplete)}\n---MARKDOWN---\n## Сводка\nВсе изменения перечислены.`,
+      'source',
+      'topic',
+    );
+    expect(result.valid_json).toBe(true);
+    expect(result.repaired_json).toBe(true);
+    expect(result.report.structured_facts.conflicts).toEqual([]);
+    expect(result.report.structured_facts.confirmed_decisions[0]?.external_urls).toEqual([]);
+    expect(result.report.parsed_summary).toContain('Все изменения перечислены');
+  });
+
   it('невалидный JSON сохраняет обычную Markdown-сводку и предупреждение', () => {
     const result = importAiResponse(
       '## Q&A\nВопрос: Как исправить?\nОтвет: Перезапустить устройство.',
