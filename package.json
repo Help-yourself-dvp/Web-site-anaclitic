@@ -1,6 +1,6 @@
 {
   "name": "forum-knowledge-base",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "workspaces": ["extension"],
   "description": "Локальное расширение для сбора сообщений форумов и ручного анализа через онлайн-ИИ",
