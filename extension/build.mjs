@@ -7,6 +7,11 @@ const root = dirname(fileURLToPath(import.meta.url));
 const src = resolve(root, 'src');
 const out = resolve(root, 'dist');
 const { version } = JSON.parse(await readFile(resolve(root, '../version.json'), 'utf8'));
+const rootPackage = JSON.parse(await readFile(resolve(root, '../package.json'), 'utf8'));
+const extensionPackage = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
+if (rootPackage.version !== version || extensionPackage.version !== version) {
+  throw new Error(`Version mismatch: version.json=${version}, root package=${rootPackage.version}, extension package=${extensionPackage.version}`);
+}
 
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
