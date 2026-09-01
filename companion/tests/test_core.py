@@ -62,6 +62,27 @@ class CompanionCoreTests(unittest.TestCase):
         self.assertEqual(len(imported.report["qa_entries"]), 1)
         self.assertTrue(imported.warnings)
 
+    def test_missing_optional_fields_are_repaired_and_human_summary_is_kept(self) -> None:
+        incomplete = {
+            "schema_version": "1.0", "report": {
+                "title": "Отчёт", "period": {"from": None, "to": None}, "overview": "Коротко",
+                "important_news": [],
+                "confirmed_decisions": [{"title": "Решение", "details": "Описание", "source_post_urls": []}],
+                "bugs_and_problems": [], "rumors": [], "links": [], "things_to_check": [], "qa": [],
+            },
+        }
+        imported = import_ai_response(json.dumps(incomplete, ensure_ascii=False) + "\n---MARKDOWN---\n## Важное\nПолная сводка.", "source", "topic")
+        self.assertTrue(imported.valid_json)
+        self.assertTrue(imported.repaired_json)
+        self.assertIn("Полная сводка", imported.report["parsed_summary"])
+
+    def test_reset_collection_removes_topic_reports(self) -> None:
+        report = import_ai_response("## Сводка", self.source["source_id"], "1108618").report
+        self.db.upsert_report(report)
+        self.db.reset_collection(self.source["source_id"])
+        self.assertEqual(self.db.list_reports(self.source["source_id"], 10), [])
+        self.assertEqual(self.db.list_sources(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,12 +1,14 @@
 import { sourceForUrl } from './adapters';
 import { clearBackgroundSource, readBackgroundCheck, runBackgroundCheck } from './background-check';
 import {
+  clearAllData,
   getAllSources,
   getLatestRun,
   deletePostsByKeys,
   getPosts,
   getReports,
   getQa,
+  getLocalDataSize,
   getRuns,
   getSource,
   newRun,
@@ -137,10 +139,11 @@ async function syncCompanion(path: string, body: unknown): Promise<string | null
 }
 
 async function makeState(url: string): Promise<ExtensionState> {
-  const [settings, sources, backgroundCheck] = await Promise.all([
+  const [settings, sources, backgroundCheck, localDataSize] = await Promise.all([
     getSettings(),
     getAllSources(),
     readBackgroundCheck(),
+    getLocalDataSize(),
   ]);
   if (!/^https?:\/\//i.test(url)) {
     return {
@@ -148,6 +151,7 @@ async function makeState(url: string): Promise<ExtensionState> {
       sources,
       recentPosts: [],
       recentPostCount: 0,
+      localDataSize,
       recentReports: [],
       backgroundCheck,
       lastRunAt: null,
@@ -169,6 +173,7 @@ async function makeState(url: string): Promise<ExtensionState> {
     sources,
     recentPosts: posts.slice(-8).reverse(),
     recentPostCount: posts.length,
+    localDataSize,
     recentReports: recentReports.slice(0, 5),
     backgroundCheck,
     lastRunAt: latestRun?.created_at || null,
@@ -358,6 +363,18 @@ async function packet(mode: 'single' | 'split'): Promise<BackgroundResponse> {
   return { ok: true, packet };
 }
 
+async function clearAllLocalData(): Promise<BackgroundResponse> {
+  await clearAllData();
+  await runBackgroundCheck([], false);
+  const companionWarning = await syncCompanion('/api/clear-all', {});
+  return {
+    ok: true,
+    message: companionWarning
+      ? `Все данные расширения удалены. ${companionWarning}`
+      : 'Все посты, отчёты, Q&A и точки отсчёта удалены.',
+  };
+}
+
 async function resetActiveSource(url: string): Promise<BackgroundResponse> {
   if (!/^https?:\/\//i.test(url)) return { ok: false, error: 'Сначала откройте страницу этой темы.' };
   const settings = await getSettings();
@@ -371,7 +388,7 @@ async function resetActiveSource(url: string): Promise<BackgroundResponse> {
     ok: true,
     message: companionWarning
       ? `Данные расширения удалены. ${companionWarning}`
-      : 'Сохранённые посты и checkpoint этой темы удалены. Отчёты ИИ оставлены.',
+      : 'Все данные этой темы, включая посты, отчёты и Q&A, удалены.',
   };
 }
 
@@ -537,6 +554,8 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
       return exportLocal();
     case 'reset-source':
       return resetActiveSource(request.url);
+    case 'clear-all-data':
+      return clearAllLocalData();
     case 'clean-service-posts':
       return cleanServicePosts(request.url);
     case 'run-diagnostic':

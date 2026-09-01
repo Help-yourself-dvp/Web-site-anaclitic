@@ -15,6 +15,7 @@ export type BackgroundRequest =
   | { type: 'create-package'; mode: 'single' | 'split' }
   | { type: 'export-local' }
   | { type: 'reset-source'; url: string }
+  | { type: 'clear-all-data' }
   | { type: 'clean-service-posts'; url: string }
   | { type: 'search-local'; query: string }
   | { type: 'run-diagnostic'; url: string }
@@ -60,6 +61,7 @@ export interface ExtensionState {
   sources: SourceRecord[];
   recentPosts: ForumPost[];
   recentPostCount: number;
+  localDataSize: number;
   recentReports: ReportRecord[];
   backgroundCheck: BackgroundCheckState | null;
   lastRunAt: string | null;

@@ -939,12 +939,28 @@
   async function resetSource(sourceId) {
     const db = await openDatabase();
     try {
-      const tx = db.transaction(["sources", "posts", "runs"], "readwrite");
+      const tx = db.transaction(["sources", "posts", "runs", "reports", "qa"], "readwrite");
       tx.objectStore("sources").delete(sourceId);
       await Promise.all([
         deleteByIndex(tx.objectStore("posts"), "source_id", sourceId),
-        deleteByIndex(tx.objectStore("runs"), "source_id", sourceId)
+        deleteByIndex(tx.objectStore("runs"), "source_id", sourceId),
+        deleteByIndex(tx.objectStore("reports"), "source_id", sourceId),
+        deleteByIndex(tx.objectStore("qa"), "source_id", sourceId)
       ]);
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  }
+  async function clearAllData() {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(["sources", "posts", "runs", "reports", "qa"], "readwrite");
+      tx.objectStore("sources").clear();
+      tx.objectStore("posts").clear();
+      tx.objectStore("runs").clear();
+      tx.objectStore("reports").clear();
+      tx.objectStore("qa").clear();
       await transactionDone(tx);
     } finally {
       db.close();
@@ -1034,6 +1050,17 @@ ${entry.detailed_answer}`;
     } finally {
       db.close();
     }
+  }
+  async function getLocalDataSize() {
+    const [sources, posts, reports, qa, runs] = await Promise.all([
+      getAllSources(),
+      getPosts(),
+      getReports(),
+      getQa(),
+      getRuns()
+    ]);
+    const json = JSON.stringify({ sources, posts, reports, qa, runs });
+    return typeof TextEncoder === "undefined" ? json.length * 2 : new TextEncoder().encode(json).byteLength;
   }
   async function getReports(sourceId) {
     const db = await openDatabase();
@@ -1630,15 +1657,21 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
   function repairMissingFields(input, humanSummary) {
     if (!isRecord(input)) return { value: input, warnings: [] };
     const root = { ...input };
+    const isMissing = (value) => value === void 0 || value === null;
+    const asStringArray = (value) => {
+      if (typeof value === "string") return value.trim() ? [value] : [];
+      if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
+      return null;
+    };
     const warnings = [];
     const note = (path) => {
       if (warnings.length < 30) warnings.push(`\u0410\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \u043F\u043E\u043B\u0435 ${path}.`);
     };
-    if (root.schema_version === void 0) {
+    if (isMissing(root.schema_version)) {
       root.schema_version = "1.0";
       note("schema_version");
     }
-    if (root.markdown_summary === void 0) {
+    if (isMissing(root.markdown_summary)) {
       root.markdown_summary = humanSummary || (isRecord(root.report) && typeof root.report.overview === "string" ? root.report.overview : "");
       note("markdown_summary");
     }
@@ -1655,7 +1688,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       ["overview", ""]
     ];
     reportTextDefaults.forEach(([field, fallback]) => {
-      if (report[field] === void 0) {
+      if (isMissing(report[field])) {
         report[field] = fallback;
         note(`report.${field}`);
       }
@@ -1686,56 +1719,68 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       report[section] = report[section].map((item) => {
         if (!isRecord(item)) return item;
         const fixed = { ...item };
-        if (fixed.title === void 0) {
+        if (isMissing(fixed.title)) {
           fixed.title = "";
           note(`report.${section}[].title`);
         }
-        if (fixed.details === void 0) {
+        if (isMissing(fixed.details)) {
           fixed.details = "";
           note(`report.${section}[].details`);
         }
-        if (fixed.status === void 0) {
+        if (isMissing(fixed.status)) {
           fixed.status = "unconfirmed";
           note(`report.${section}[].status`);
         }
-        if (fixed.source_post_urls === void 0) {
+        if (isMissing(fixed.source_post_urls)) {
           fixed.source_post_urls = [];
           note(`report.${section}[].source_post_urls`);
+        } else if (typeof fixed.source_post_urls === "string") {
+          fixed.source_post_urls = asStringArray(fixed.source_post_urls);
+          note(`report.${section}[].source_post_urls`);
         }
-        if (fixed.external_urls === void 0) {
+        if (isMissing(fixed.external_urls)) {
           fixed.external_urls = [];
+          note(`report.${section}[].external_urls`);
+        } else if (typeof fixed.external_urls === "string") {
+          fixed.external_urls = asStringArray(fixed.external_urls);
           note(`report.${section}[].external_urls`);
         }
         return fixed;
       });
     }
-    if (report.links === void 0) {
+    if (isMissing(report.links)) {
       report.links = [];
       note("report.links");
     } else if (Array.isArray(report.links)) {
       report.links = report.links.map((item) => {
         if (!isRecord(item)) return item;
         const fixed = { ...item };
-        if (fixed.url === void 0) {
+        if (isMissing(fixed.url)) {
           fixed.url = "";
           note("report.links[].url");
         }
-        if (fixed.annotation === void 0) {
+        if (isMissing(fixed.annotation)) {
           fixed.annotation = "";
           note("report.links[].annotation");
         }
-        if (fixed.source_post_urls === void 0) {
+        if (isMissing(fixed.source_post_urls)) {
           fixed.source_post_urls = [];
+          note("report.links[].source_post_urls");
+        } else if (typeof fixed.source_post_urls === "string") {
+          fixed.source_post_urls = asStringArray(fixed.source_post_urls);
           note("report.links[].source_post_urls");
         }
         return fixed;
       });
     }
-    if (report.things_to_check === void 0) {
+    if (isMissing(report.things_to_check)) {
       report.things_to_check = [];
       note("report.things_to_check");
+    } else if (typeof report.things_to_check === "string") {
+      report.things_to_check = asStringArray(report.things_to_check);
+      note("report.things_to_check");
     }
-    if (report.qa === void 0) {
+    if (isMissing(report.qa)) {
       report.qa = [];
       note("report.qa");
     } else if (Array.isArray(report.qa)) {
@@ -1756,16 +1801,23 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
           ["confidence_note", ""]
         ];
         defaults.forEach(([field, fallback]) => {
-          if (fixed[field] === void 0) {
+          const nullable = field === "first_seen_at" || field === "updated_at";
+          if (nullable && fixed[field] === void 0 || !nullable && isMissing(fixed[field])) {
             fixed[field] = fallback;
+            note(`report.qa[].${field}`);
+          } else if (!nullable && (field === "tags" || field === "source_post_urls" || field === "external_urls") && typeof fixed[field] === "string") {
+            fixed[field] = asStringArray(fixed[field]);
             note(`report.qa[].${field}`);
           }
         });
         return fixed;
       });
     }
-    if (report.conflicts === void 0) {
+    if (isMissing(report.conflicts)) {
       report.conflicts = [];
+      note("report.conflicts");
+    } else if (typeof report.conflicts === "string") {
+      report.conflicts = asStringArray(report.conflicts);
       note("report.conflicts");
     }
     return { value: root, warnings };
@@ -2045,10 +2097,11 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     }
   }
   async function makeState(url) {
-    const [settings, sources, backgroundCheck] = await Promise.all([
+    const [settings, sources, backgroundCheck, localDataSize] = await Promise.all([
       getSettings(),
       getAllSources(),
-      readBackgroundCheck()
+      readBackgroundCheck(),
+      getLocalDataSize()
     ]);
     if (!/^https?:\/\//i.test(url)) {
       return {
@@ -2056,6 +2109,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
         sources,
         recentPosts: [],
         recentPostCount: 0,
+        localDataSize,
         recentReports: [],
         backgroundCheck,
         lastRunAt: null,
@@ -2077,6 +2131,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       sources,
       recentPosts: posts.slice(-8).reverse(),
       recentPostCount: posts.length,
+      localDataSize,
       recentReports: recentReports.slice(0, 5),
       backgroundCheck,
       lastRunAt: latestRun?.created_at || null,
@@ -2253,6 +2308,15 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     };
     return { ok: true, packet: packet2 };
   }
+  async function clearAllLocalData() {
+    await clearAllData();
+    await runBackgroundCheck([], false);
+    const companionWarning = await syncCompanion("/api/clear-all", {});
+    return {
+      ok: true,
+      message: companionWarning ? `\u0412\u0441\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u044B. ${companionWarning}` : "\u0412\u0441\u0435 \u043F\u043E\u0441\u0442\u044B, \u043E\u0442\u0447\u0451\u0442\u044B, Q&A \u0438 \u0442\u043E\u0447\u043A\u0438 \u043E\u0442\u0441\u0447\u0451\u0442\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u044B."
+    };
+  }
   async function resetActiveSource(url) {
     if (!/^https?:\/\//i.test(url)) return { ok: false, error: "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u043E\u0442\u043A\u0440\u043E\u0439\u0442\u0435 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B." };
     const settings = await getSettings();
@@ -2264,7 +2328,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     const companionWarning = await syncCompanion("/api/reset", { source_id: source.source_id });
     return {
       ok: true,
-      message: companionWarning ? `\u0414\u0430\u043D\u043D\u044B\u0435 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u044B. ${companionWarning}` : "\u0421\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u043F\u043E\u0441\u0442\u044B \u0438 checkpoint \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B \u0443\u0434\u0430\u043B\u0435\u043D\u044B. \u041E\u0442\u0447\u0451\u0442\u044B \u0418\u0418 \u043E\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u044B."
+      message: companionWarning ? `\u0414\u0430\u043D\u043D\u044B\u0435 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F \u0443\u0434\u0430\u043B\u0435\u043D\u044B. ${companionWarning}` : "\u0412\u0441\u0435 \u0434\u0430\u043D\u043D\u044B\u0435 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B, \u0432\u043A\u043B\u044E\u0447\u0430\u044F \u043F\u043E\u0441\u0442\u044B, \u043E\u0442\u0447\u0451\u0442\u044B \u0438 Q&A, \u0443\u0434\u0430\u043B\u0435\u043D\u044B."
     };
   }
   async function runDiagnostic(url) {
@@ -2419,6 +2483,8 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
         return exportLocal();
       case "reset-source":
         return resetActiveSource(request.url);
+      case "clear-all-data":
+        return clearAllLocalData();
       case "clean-service-posts":
         return cleanServicePosts(request.url);
       case "run-diagnostic":

@@ -16,6 +16,7 @@ const sourceInfo = $('#sourceInfo');
 const automaticInfo = $('#automaticInfo');
 const mediaInfo = $('#mediaInfo');
 const resetButton = $('#resetButton') as HTMLButtonElement;
+const clearAllButton = $('#clearAllButton') as HTMLButtonElement;
 const adapterBadge = $('#adapterBadge');
 const checkpointBadge = $('#checkpointBadge');
 const postCount = $('#postCount');
@@ -89,6 +90,7 @@ function renderState(state: ExtensionState): void {
     manual: 'Картинки: собираются только у выделенного сообщения.',
   };
   resetButton.disabled = !state.currentSource;
+  clearAllButton.disabled = state.localDataSize === 0;
   pagesInput.value = String(state.settings.maxPages);
   if (state.currentSource) {
     adapterBadge.textContent = state.currentSource.adapter_name;
@@ -291,7 +293,11 @@ async function cleanCurrentSource(): Promise<void> {
 }
 
 async function resetCurrentSource(): Promise<void> {
-  if (!activeUrl || !confirm('Удалить сохранённые посты и точку отсчёта этой темы? Отчёты ИИ останутся.')) return;
+  if (
+    !activeUrl ||
+    !confirm('Удалить ВСЕ данные этой темы, включая посты, отчёты и Q&A? Это действие нельзя отменить.')
+  )
+    return;
   await withBusy(async () => {
     const response = await send({ type: 'reset-source', url: activeUrl });
     if (!response.ok) {
@@ -299,6 +305,19 @@ async function resetCurrentSource(): Promise<void> {
       return;
     }
     setStatus('Данные темы удалены. Теперь можно заново создать точку отсчёта или импортировать историю.', 'success');
+    await refresh();
+  });
+}
+
+async function clearAllData(): Promise<void> {
+  if (!confirm('Удалить ВСЕ темы, посты, отчёты и Q&A из расширения? Это действие нельзя отменить.')) return;
+  await withBusy(async () => {
+    const response = await send({ type: 'clear-all-data' });
+    if (!response.ok) {
+      setStatus(response.error, 'error');
+      return;
+    }
+    setStatus('message' in response ? response.message : 'Вся база удалена.', 'success');
     await refresh();
   });
 }
@@ -532,6 +551,7 @@ responseFile.addEventListener('change', () => {
 $('#cleanButton').addEventListener('click', () => void cleanCurrentSource());
 $('#diagnosticButton').addEventListener('click', () => void downloadDiagnostic());
 $('#resetButton').addEventListener('click', () => void resetCurrentSource());
+clearAllButton.addEventListener('click', () => void clearAllData());
 $('#checkpointButton').addEventListener('click', () => void collect('checkpoint'));
 $('#historyButton').addEventListener('click', () => void collect('history'));
 $('#collectButton').addEventListener('click', () => void collect('new'));

@@ -80,6 +80,12 @@ def reset(request: ResetRequest) -> dict[str, Any]:
     return {"ok": True, "source_id": request.source_id}
 
 
+@app.post("/api/clear-all")
+def clear_all() -> dict[str, Any]:
+    database.clear_all()
+    return {"ok": True}
+
+
 @app.post("/api/clean")
 def clean(request: CleanRequest) -> dict[str, Any]:
     deleted = database.delete_post_keys(request.source_id, request.post_keys)

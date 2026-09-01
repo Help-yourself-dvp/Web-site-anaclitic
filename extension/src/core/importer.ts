@@ -250,15 +250,21 @@ function extractHumanSummary(raw: string, jsonText: string | null): string {
 function repairMissingFields(input: unknown, humanSummary: string): { value: unknown; warnings: string[] } {
   if (!isRecord(input)) return { value: input, warnings: [] };
   const root: RecordValue = { ...input };
+  const isMissing = (value: unknown): boolean => value === undefined || value === null;
+  const asStringArray = (value: unknown): string[] | null => {
+    if (typeof value === 'string') return value.trim() ? [value] : [];
+    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return value;
+    return null;
+  };
   const warnings: string[] = [];
   const note = (path: string) => {
     if (warnings.length < 30) warnings.push(`Автоматически добавлено поле ${path}.`);
   };
-  if (root.schema_version === undefined) {
+  if (isMissing(root.schema_version)) {
     root.schema_version = '1.0';
     note('schema_version');
   }
-  if (root.markdown_summary === undefined) {
+  if (isMissing(root.markdown_summary)) {
     root.markdown_summary =
       humanSummary || (isRecord(root.report) && typeof root.report.overview === 'string' ? root.report.overview : '');
     note('markdown_summary');
@@ -278,7 +284,7 @@ function repairMissingFields(input: unknown, humanSummary: string): { value: unk
     ['overview', ''],
   ];
   reportTextDefaults.forEach(([field, fallback]) => {
-    if (report[field] === undefined) {
+    if (isMissing(report[field])) {
       report[field] = fallback;
       note(`report.${field}`);
     }
@@ -309,56 +315,68 @@ function repairMissingFields(input: unknown, humanSummary: string): { value: unk
     report[section] = report[section].map((item) => {
       if (!isRecord(item)) return item;
       const fixed: RecordValue = { ...item };
-      if (fixed.title === undefined) {
+      if (isMissing(fixed.title)) {
         fixed.title = '';
         note(`report.${section}[].title`);
       }
-      if (fixed.details === undefined) {
+      if (isMissing(fixed.details)) {
         fixed.details = '';
         note(`report.${section}[].details`);
       }
-      if (fixed.status === undefined) {
+      if (isMissing(fixed.status)) {
         fixed.status = 'unconfirmed';
         note(`report.${section}[].status`);
       }
-      if (fixed.source_post_urls === undefined) {
+      if (isMissing(fixed.source_post_urls)) {
         fixed.source_post_urls = [];
         note(`report.${section}[].source_post_urls`);
+      } else if (typeof fixed.source_post_urls === 'string') {
+        fixed.source_post_urls = asStringArray(fixed.source_post_urls);
+        note(`report.${section}[].source_post_urls`);
       }
-      if (fixed.external_urls === undefined) {
+      if (isMissing(fixed.external_urls)) {
         fixed.external_urls = [];
+        note(`report.${section}[].external_urls`);
+      } else if (typeof fixed.external_urls === 'string') {
+        fixed.external_urls = asStringArray(fixed.external_urls);
         note(`report.${section}[].external_urls`);
       }
       return fixed;
     });
   }
-  if (report.links === undefined) {
+  if (isMissing(report.links)) {
     report.links = [];
     note('report.links');
   } else if (Array.isArray(report.links)) {
     report.links = report.links.map((item) => {
       if (!isRecord(item)) return item;
       const fixed: RecordValue = { ...item };
-      if (fixed.url === undefined) {
+      if (isMissing(fixed.url)) {
         fixed.url = '';
         note('report.links[].url');
       }
-      if (fixed.annotation === undefined) {
+      if (isMissing(fixed.annotation)) {
         fixed.annotation = '';
         note('report.links[].annotation');
       }
-      if (fixed.source_post_urls === undefined) {
+      if (isMissing(fixed.source_post_urls)) {
         fixed.source_post_urls = [];
+        note('report.links[].source_post_urls');
+      } else if (typeof fixed.source_post_urls === 'string') {
+        fixed.source_post_urls = asStringArray(fixed.source_post_urls);
         note('report.links[].source_post_urls');
       }
       return fixed;
     });
   }
-  if (report.things_to_check === undefined) {
+  if (isMissing(report.things_to_check)) {
     report.things_to_check = [];
     note('report.things_to_check');
+  } else if (typeof report.things_to_check === 'string') {
+    report.things_to_check = asStringArray(report.things_to_check);
+    note('report.things_to_check');
   }
-  if (report.qa === undefined) {
+  if (isMissing(report.qa)) {
     report.qa = [];
     note('report.qa');
   } else if (Array.isArray(report.qa)) {
@@ -379,16 +397,27 @@ function repairMissingFields(input: unknown, humanSummary: string): { value: unk
         ['confidence_note', ''],
       ];
       defaults.forEach(([field, fallback]) => {
-        if (fixed[field] === undefined) {
+        const nullable = field === 'first_seen_at' || field === 'updated_at';
+        if ((nullable && fixed[field] === undefined) || (!nullable && isMissing(fixed[field]))) {
           fixed[field] = fallback;
+          note(`report.qa[].${field}`);
+        } else if (
+          !nullable &&
+          (field === 'tags' || field === 'source_post_urls' || field === 'external_urls') &&
+          typeof fixed[field] === 'string'
+        ) {
+          fixed[field] = asStringArray(fixed[field]);
           note(`report.qa[].${field}`);
         }
       });
       return fixed;
     });
   }
-  if (report.conflicts === undefined) {
+  if (isMissing(report.conflicts)) {
     report.conflicts = [];
+    note('report.conflicts');
+  } else if (typeof report.conflicts === 'string') {
+    report.conflicts = asStringArray(report.conflicts);
     note('report.conflicts');
   }
   return { value: root, warnings };

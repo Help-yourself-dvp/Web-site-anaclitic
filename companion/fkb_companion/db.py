@@ -263,22 +263,22 @@ class Database:
                     )
         return len(identities)
 
+    def clear_all(self) -> None:
+        with self.connect() as connection:
+            for table in ('qa', 'reports', 'runs', 'posts', 'sources'):
+                connection.execute(f'DELETE FROM {table}')
+            if self.fts5_available:
+                connection.execute('DELETE FROM search_fts')
+
     def reset_collection(self, source_id: str) -> None:
         with self.connect() as connection:
+            connection.execute('DELETE FROM qa WHERE source_id = ?', (source_id,))
+            connection.execute('DELETE FROM reports WHERE source_id = ?', (source_id,))
             connection.execute('DELETE FROM runs WHERE source_id = ?', (source_id,))
             connection.execute('DELETE FROM posts WHERE source_id = ?', (source_id,))
             if self.fts5_available:
-                connection.execute("DELETE FROM search_fts WHERE source_id = ? AND kind = 'post'", (source_id,))
-            connection.execute(
-                """
-                UPDATE sources SET last_checkpoint_post_id = NULL,
-                    last_checkpoint_url = NULL, last_checkpoint_page_url = NULL,
-                    recent_known_ids_json = '[]',
-                    last_checked_at = NULL, updated_at = ?
-                WHERE source_id = ?
-                """,
-                (utc_now(), source_id),
-            )
+                connection.execute("DELETE FROM search_fts WHERE source_id = ?", (source_id,))
+            connection.execute('DELETE FROM sources WHERE source_id = ?', (source_id,))
 
     def upsert_run(self, run: dict[str, Any]) -> None:
         with self.connect() as connection:

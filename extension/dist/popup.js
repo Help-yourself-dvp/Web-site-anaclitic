@@ -735,6 +735,7 @@
   var automaticInfo = $("#automaticInfo");
   var mediaInfo = $("#mediaInfo");
   var resetButton = $("#resetButton");
+  var clearAllButton = $("#clearAllButton");
   var adapterBadge = $("#adapterBadge");
   var checkpointBadge = $("#checkpointBadge");
   var postCount = $("#postCount");
@@ -803,6 +804,7 @@
       manual: "\u041A\u0430\u0440\u0442\u0438\u043D\u043A\u0438: \u0441\u043E\u0431\u0438\u0440\u0430\u044E\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u0443 \u0432\u044B\u0434\u0435\u043B\u0435\u043D\u043D\u043E\u0433\u043E \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F."
     };
     resetButton.disabled = !state.currentSource;
+    clearAllButton.disabled = state.localDataSize === 0;
     pagesInput.value = String(state.settings.maxPages);
     if (state.currentSource) {
       adapterBadge.textContent = state.currentSource.adapter_name;
@@ -981,7 +983,8 @@
     });
   }
   async function resetCurrentSource() {
-    if (!activeUrl || !confirm("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0435 \u043F\u043E\u0441\u0442\u044B \u0438 \u0442\u043E\u0447\u043A\u0443 \u043E\u0442\u0441\u0447\u0451\u0442\u0430 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B? \u041E\u0442\u0447\u0451\u0442\u044B \u0418\u0418 \u043E\u0441\u0442\u0430\u043D\u0443\u0442\u0441\u044F.")) return;
+    if (!activeUrl || !confirm("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0412\u0421\u0415 \u0434\u0430\u043D\u043D\u044B\u0435 \u044D\u0442\u043E\u0439 \u0442\u0435\u043C\u044B, \u0432\u043A\u043B\u044E\u0447\u0430\u044F \u043F\u043E\u0441\u0442\u044B, \u043E\u0442\u0447\u0451\u0442\u044B \u0438 Q&A? \u042D\u0442\u043E \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043D\u0435\u043B\u044C\u0437\u044F \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C."))
+      return;
     await withBusy(async () => {
       const response = await send({ type: "reset-source", url: activeUrl });
       if (!response.ok) {
@@ -989,6 +992,18 @@
         return;
       }
       setStatus("\u0414\u0430\u043D\u043D\u044B\u0435 \u0442\u0435\u043C\u044B \u0443\u0434\u0430\u043B\u0435\u043D\u044B. \u0422\u0435\u043F\u0435\u0440\u044C \u043C\u043E\u0436\u043D\u043E \u0437\u0430\u043D\u043E\u0432\u043E \u0441\u043E\u0437\u0434\u0430\u0442\u044C \u0442\u043E\u0447\u043A\u0443 \u043E\u0442\u0441\u0447\u0451\u0442\u0430 \u0438\u043B\u0438 \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0438\u0441\u0442\u043E\u0440\u0438\u044E.", "success");
+      await refresh();
+    });
+  }
+  async function clearAllData() {
+    if (!confirm("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u0412\u0421\u0415 \u0442\u0435\u043C\u044B, \u043F\u043E\u0441\u0442\u044B, \u043E\u0442\u0447\u0451\u0442\u044B \u0438 Q&A \u0438\u0437 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u044F? \u042D\u0442\u043E \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u043D\u0435\u043B\u044C\u0437\u044F \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C.")) return;
+    await withBusy(async () => {
+      const response = await send({ type: "clear-all-data" });
+      if (!response.ok) {
+        setStatus(response.error, "error");
+        return;
+      }
+      setStatus("message" in response ? response.message : "\u0412\u0441\u044F \u0431\u0430\u0437\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0430.", "success");
       await refresh();
     });
   }
@@ -1203,6 +1218,7 @@ ${firstChunk.prompt_md}`;
   $("#cleanButton").addEventListener("click", () => void cleanCurrentSource());
   $("#diagnosticButton").addEventListener("click", () => void downloadDiagnostic());
   $("#resetButton").addEventListener("click", () => void resetCurrentSource());
+  clearAllButton.addEventListener("click", () => void clearAllData());
   $("#checkpointButton").addEventListener("click", () => void collect("checkpoint"));
   $("#historyButton").addEventListener("click", () => void collect("history"));
   $("#collectButton").addEventListener("click", () => void collect("new"));

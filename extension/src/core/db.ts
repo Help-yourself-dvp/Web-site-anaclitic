@@ -124,12 +124,29 @@ export async function deletePostsByKeys(keys: string[]): Promise<void> {
 export async function resetSource(sourceId: string): Promise<void> {
   const db = await openDatabase();
   try {
-    const tx = db.transaction(['sources', 'posts', 'runs'], 'readwrite');
+    const tx = db.transaction(['sources', 'posts', 'runs', 'reports', 'qa'], 'readwrite');
     tx.objectStore('sources').delete(sourceId);
     await Promise.all([
       deleteByIndex(tx.objectStore('posts'), 'source_id', sourceId),
       deleteByIndex(tx.objectStore('runs'), 'source_id', sourceId),
+      deleteByIndex(tx.objectStore('reports'), 'source_id', sourceId),
+      deleteByIndex(tx.objectStore('qa'), 'source_id', sourceId),
     ]);
+    await transactionDone(tx);
+  } finally {
+    db.close();
+  }
+}
+
+export async function clearAllData(): Promise<void> {
+  const db = await openDatabase();
+  try {
+    const tx = db.transaction(['sources', 'posts', 'runs', 'reports', 'qa'], 'readwrite');
+    tx.objectStore('sources').clear();
+    tx.objectStore('posts').clear();
+    tx.objectStore('runs').clear();
+    tx.objectStore('reports').clear();
+    tx.objectStore('qa').clear();
     await transactionDone(tx);
   } finally {
     db.close();
@@ -247,6 +264,18 @@ export async function getQa(sourceId?: string): Promise<AiQaEntry[]> {
   } finally {
     db.close();
   }
+}
+
+export async function getLocalDataSize(): Promise<number> {
+  const [sources, posts, reports, qa, runs] = await Promise.all([
+    getAllSources(),
+    getPosts(),
+    getReports(),
+    getQa(),
+    getRuns(),
+  ]);
+  const json = JSON.stringify({ sources, posts, reports, qa, runs });
+  return typeof TextEncoder === 'undefined' ? json.length * 2 : new TextEncoder().encode(json).byteLength;
 }
 
 export async function getReports(sourceId?: string): Promise<ReportRecord[]> {
