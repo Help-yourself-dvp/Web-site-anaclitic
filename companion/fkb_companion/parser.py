@@ -201,10 +201,20 @@ def _repair_missing_fields(value: Any, human_summary: str) -> tuple[Any, list[st
         if len(warnings) < 30:
             warnings.append(f"Автоматически добавлено поле {path}.")
 
-    if "schema_version" not in root:
+    def is_missing(value: Any) -> bool:
+        return value is None
+
+    def as_string_array(value: Any, path: str) -> list[str] | None:
+        if isinstance(value, str):
+            return [value.strip()] if value.strip() else []
+        if isinstance(value, list) and all(isinstance(item, str) for item in value):
+            return value
+        return None
+
+    if is_missing(root.get("schema_version")):
         root["schema_version"] = "1.0"
         note("schema_version")
-    if "markdown_summary" not in root:
+    if is_missing(root.get("markdown_summary")):
         report_value = root.get("report")
         root["markdown_summary"] = human_summary or (report_value.get("overview", "") if isinstance(report_value, dict) else "")
         note("markdown_summary")
@@ -216,25 +226,25 @@ def _repair_missing_fields(value: Any, human_summary: str) -> tuple[Any, list[st
     report = dict(root["report"])
     root["report"] = report
     for field in ("title", "overview"):
-        if field not in report:
+        if is_missing(report.get(field)):
             report[field] = ""
             note(f"report.{field}")
     period = report.get("period")
     if not isinstance(period, dict):
         report["period"] = {"from": None, "to": None}
-        if period is None:
+        if is_missing(period):
             note("report.period")
     else:
         period = dict(period)
-        if "from" not in period:
+        if is_missing(period.get("from")):
             period["from"] = None
             note("report.period.from")
-        if "to" not in period:
+        if is_missing(period.get("to")):
             period["to"] = None
             note("report.period.to")
         report["period"] = period
     for section in SECTIONS:
-        if section not in report:
+        if is_missing(report.get(section)):
             report[section] = []
             note(f"report.{section}")
             continue
@@ -248,12 +258,16 @@ def _repair_missing_fields(value: Any, human_summary: str) -> tuple[Any, list[st
             fixed = dict(item)
             defaults = (("title", ""), ("details", ""), ("status", "unconfirmed"), ("source_post_urls", []), ("external_urls", []))
             for field, fallback in defaults:
-                if field not in fixed:
+                value = fixed.get(field)
+                if is_missing(value):
                     fixed[field] = fallback
+                    note(f"report.{section}[].{field}")
+                elif field in ("source_post_urls", "external_urls") and isinstance(value, str):
+                    fixed[field] = as_string_array(value, f"report.{section}[].{field}") or fallback
                     note(f"report.{section}[].{field}")
             fixed_items.append(fixed)
         report[section] = fixed_items
-    if "links" not in report:
+    if is_missing(report.get("links")):
         report["links"] = []
         note("report.links")
     elif isinstance(report["links"], list):
@@ -264,14 +278,22 @@ def _repair_missing_fields(value: Any, human_summary: str) -> tuple[Any, list[st
                 continue
             fixed = dict(item)
             for field, fallback in (("url", ""), ("annotation", ""), ("source_post_urls", [])):
-                if field not in fixed:
+                value = fixed.get(field)
+                if is_missing(value):
                     fixed[field] = fallback
+                    note(f"report.links[].{field}")
+                elif field == "source_post_urls" and isinstance(value, str):
+                    fixed[field] = as_string_array(value, f"report.links[].{field}") or fallback
                     note(f"report.links[].{field}")
             fixed_links.append(fixed)
         report["links"] = fixed_links
     for field in ("things_to_check", "qa", "conflicts"):
-        if field not in report:
+        value = report.get(field)
+        if is_missing(value):
             report[field] = []
+            note(f"report.{field}")
+        elif isinstance(value, str):
+            report[field] = as_string_array(value, f"report.{field}") or []
             note(f"report.{field}")
     if isinstance(report.get("qa"), list):
         fixed_qa = []
@@ -286,8 +308,12 @@ def _repair_missing_fields(value: Any, human_summary: str) -> tuple[Any, list[st
                 continue
             fixed = dict(item)
             for field, fallback in defaults:
-                if field not in fixed:
+                value = fixed.get(field)
+                if is_missing(value):
                     fixed[field] = fallback
+                    note(f"report.qa[].{field}")
+                elif field in ("tags", "source_post_urls", "external_urls") and isinstance(value, str):
+                    fixed[field] = as_string_array(value, f"report.qa[].{field}") or fallback
                     note(f"report.qa[].{field}")
             fixed_qa.append(fixed)
         report["qa"] = fixed_qa

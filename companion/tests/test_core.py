@@ -83,6 +83,28 @@ class CompanionCoreTests(unittest.TestCase):
         self.assertEqual(self.db.list_reports(self.source["source_id"], 10), [])
         self.assertEqual(self.db.list_sources(), [])
 
+    def test_null_and_string_values_are_repaired_in_sections(self) -> None:
+        incomplete = {
+            "schema_version": "1.0", "report": {
+                "title": "Отчёт", "period": {"from": None, "to": None}, "overview": "Коротко",
+                "important_news": [],
+                "confirmed_decisions": [
+                    {"title": "Решение", "details": "Описание", "status": None, "source_post_urls": [], "external_urls": None}
+                ],
+                "bugs_and_problems": [
+                    {"title": "Проблема", "details": "Описание", "status": "probable", "external_urls": "https://example.test"}
+                ],
+                "rumors": [], "links": [], "things_to_check": [], "qa": [], "conflicts": None,
+            },
+        }
+        imported = import_ai_response(json.dumps(incomplete, ensure_ascii=False) + "\n---MARKDOWN---\n## Сводка\nВсе изменения.", "source", "topic")
+        self.assertTrue(imported.valid_json)
+        self.assertTrue(imported.repaired_json)
+        self.assertEqual(imported.report["structured_facts"]["conflicts"], [])
+        self.assertEqual(imported.report["structured_facts"]["confirmed_decisions"][0]["status"], "unconfirmed")
+        self.assertEqual(imported.report["structured_facts"]["confirmed_decisions"][0]["external_urls"], [])
+        self.assertEqual(imported.report["structured_facts"]["bugs_and_problems"][0]["external_urls"], ["https://example.test"])
+
 
 if __name__ == "__main__":
     unittest.main()
