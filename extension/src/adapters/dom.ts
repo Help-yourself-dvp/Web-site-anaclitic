@@ -1,5 +1,13 @@
 import type { ImageMode, ForumPost, LinkRecord, Quote } from '../core/types';
-import { normalizeUrl, normalizeWhitespace, nowIso, stableFingerprint, uniqueStrings } from '../core/utils';
+import {
+  firstDateLikeText,
+  normalizeUrl,
+  normalizeWhitespace,
+  nowIso,
+  parseForumDate,
+  stableFingerprint,
+  uniqueStrings,
+} from '../core/utils';
 import type { ParseOptions } from './types';
 
 const HTTP_PROTOCOLS = new Set(['http:', 'https:']);
@@ -27,11 +35,13 @@ export function parsePostedAt(root: ParentNode, selectors: string[]): string | n
     ? normalizeWhitespace(element.getAttribute('datetime') || element.textContent || '')
     : '';
   const rootText = normalizeWhitespace(root.textContent || '');
-  const raw =
-    elementTextValue || rootText.match(/\b\d{1,2}\.\d{1,2}\.\d{2,4}(?:,\s*|\s+)\d{1,2}:\d{2}\b/g)?.at(-1) || '';
+  // The post stamp is printed right after the «Сообщение #N» permalink and
+  // before the body, so the first stamp in the row is the one we need. The last
+  // one can be an «отредактировано …» mark from inside the message.
+  const raw = elementTextValue || firstDateLikeText(rootText);
   if (!raw) return null;
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : raw;
+  const parsed = parseForumDate(raw);
+  return parsed ? parsed.toISOString() : raw;
 }
 
 export function extractQuotes(root: Element, baseUrl: string): Quote[] {

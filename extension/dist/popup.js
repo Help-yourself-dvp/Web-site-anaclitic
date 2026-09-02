@@ -707,6 +707,192 @@
     return out;
   }
 
+  // src/core/report-view.ts
+  var STATUS_LABELS = {
+    confirmed: "\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E",
+    probable: "\u0432\u0435\u0440\u043E\u044F\u0442\u043D\u043E",
+    unconfirmed: "\u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E",
+    outdated: "\u0443\u0441\u0442\u0430\u0440\u0435\u043B\u043E",
+    conflicting: "\u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u0432\u043E"
+  };
+  function statusLabel(status2) {
+    return STATUS_LABELS[status2.toLowerCase()] || status2 || "\u0431\u0435\u0437 \u0441\u0442\u0430\u0442\u0443\u0441\u0430";
+  }
+  function shortDate(value) {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString() : value.slice(0, 10);
+  }
+  function formatPeriod(from, to) {
+    const left = shortDate(from);
+    const right = shortDate(to);
+    if (left && right) return left === right ? `\u041F\u0435\u0440\u0438\u043E\u0434: ${left}` : `\u041F\u0435\u0440\u0438\u043E\u0434: ${left} \u2014 ${right}`;
+    return `\u041F\u0435\u0440\u0438\u043E\u0434: ${left || right || "\u043D\u0435 \u0443\u043A\u0430\u0437\u0430\u043D"}`;
+  }
+  function appendSourceLinks(doc, target, urls, limit = 5) {
+    const clean = [...new Set(urls.filter(Boolean))];
+    if (clean.length === 0) return;
+    const wrap = doc.createElement("div");
+    wrap.className = "source-links";
+    clean.slice(0, limit).forEach((url, index) => {
+      const link = doc.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = `\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A ${index + 1}`;
+      wrap.append(link);
+    });
+    if (clean.length > limit) {
+      const more = doc.createElement("span");
+      more.className = "post-meta";
+      more.textContent = `\u0438 \u0435\u0449\u0451 ${clean.length - limit}`;
+      wrap.append(more);
+    }
+    target.append(wrap);
+  }
+  function appendItemBlock(doc, target, title, text, status2, urls) {
+    const block = doc.createElement("div");
+    block.className = "report-item";
+    const heading = doc.createElement("div");
+    heading.className = "report-item-title";
+    heading.textContent = title || "\u0411\u0435\u0437 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043A\u0430";
+    block.append(heading);
+    if (status2) {
+      const badge = doc.createElement("span");
+      badge.className = "report-badge";
+      badge.textContent = statusLabel(status2);
+      heading.append(" ", badge);
+    }
+    if (text) {
+      const body = doc.createElement("div");
+      body.textContent = text;
+      block.append(body);
+    }
+    appendSourceLinks(doc, block, urls);
+    target.append(block);
+  }
+  function appendSection(doc, target, caption, count, fill) {
+    if (count === 0) return;
+    const details = doc.createElement("details");
+    details.className = "report-section";
+    const summary = doc.createElement("summary");
+    summary.textContent = `${caption}: ${count}`;
+    const body = doc.createElement("div");
+    details.append(summary, body);
+    fill(body);
+    target.append(details);
+  }
+  function renderSavedReports(container, reports) {
+    const doc = container.ownerDocument;
+    container.replaceChildren();
+    if (reports.length === 0) {
+      container.textContent = "\u041F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u043E\u0442\u0432\u0435\u0442\u043E\u0432 \u0418\u0418.";
+      return;
+    }
+    for (const report of reports) {
+      const facts = report.structured_facts;
+      const item = doc.createElement("div");
+      item.className = "saved-report";
+      const title = doc.createElement("strong");
+      title.textContent = facts.title || "\u0421\u0432\u043E\u0434\u043A\u0430 \u0431\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F";
+      const sections = [
+        ["\u0412\u0430\u0436\u043D\u044B\u0435 \u043D\u043E\u0432\u043E\u0441\u0442\u0438", facts.important_news],
+        ["\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F", facts.confirmed_decisions],
+        ["\u0411\u0430\u0433\u0438 \u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B", facts.bugs_and_problems],
+        ["\u0421\u043B\u0443\u0445\u0438 \u0438 \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F", facts.rumors]
+      ];
+      const sourceCount = new Set(
+        sections.flatMap(([, list]) => list.flatMap((entry) => entry.source_post_urls)).filter(Boolean)
+      ).size;
+      const meta = doc.createElement("div");
+      meta.className = "post-meta";
+      meta.textContent = [
+        new Date(report.created_at).toLocaleString(),
+        formatPeriod(facts.period.from, facts.period.to),
+        `\u041A\u0430\u0440\u0442\u043E\u0447\u0435\u043A Q&A: ${report.qa_entries.length}`,
+        `\u041F\u0443\u043D\u043A\u0442\u043E\u0432 \u0432 \u0440\u0430\u0437\u0434\u0435\u043B\u0430\u0445: ${sections.reduce((total, [, list]) => total + list.length, 0)}`,
+        `\u0421\u0441\u044B\u043B\u043E\u043A \u043D\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438: ${sourceCount}`
+      ].join(" \xB7 ");
+      const summary = doc.createElement("div");
+      summary.className = "report-summary";
+      summary.textContent = report.parsed_summary || "\u0421\u0432\u043E\u0434\u043A\u0430 \u043F\u0443\u0441\u0442\u0430\u044F.";
+      item.append(title, meta, summary);
+      for (const [caption, list] of sections) {
+        appendSection(doc, item, caption, list.length, (body) => {
+          for (const entry of list) {
+            appendItemBlock(doc, body, entry.title, entry.details, entry.status, [
+              ...entry.source_post_urls,
+              ...entry.external_urls
+            ]);
+          }
+        });
+      }
+      appendSection(doc, item, "\u0412\u043E\u043F\u0440\u043E\u0441\u044B \u0438 \u043E\u0442\u0432\u0435\u0442\u044B", report.qa_entries.length, (body) => {
+        for (const entry of report.qa_entries) {
+          appendItemBlock(doc, body, entry.question, entry.short_answer || entry.detailed_answer, entry.status, [
+            ...entry.source_post_urls,
+            ...entry.external_urls
+          ]);
+          if (entry.detailed_answer && entry.short_answer && entry.detailed_answer !== entry.short_answer) {
+            const full = doc.createElement("details");
+            const caption = doc.createElement("summary");
+            caption.textContent = "\u041F\u043E\u0434\u0440\u043E\u0431\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442";
+            const text = doc.createElement("div");
+            text.className = "report-item";
+            text.textContent = entry.detailed_answer;
+            full.append(caption, text);
+            body.append(full);
+          }
+        }
+      });
+      appendSection(doc, item, "\u041F\u043E\u043B\u0435\u0437\u043D\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438", facts.links.length, (body) => {
+        for (const link of facts.links) {
+          const block = doc.createElement("div");
+          block.className = "report-item";
+          const anchor = doc.createElement("a");
+          anchor.href = link.url;
+          anchor.target = "_blank";
+          anchor.rel = "noopener noreferrer";
+          anchor.textContent = link.url;
+          block.append(anchor);
+          if (link.annotation) {
+            const note = doc.createElement("div");
+            note.textContent = link.annotation;
+            block.append(note);
+          }
+          appendSourceLinks(doc, block, link.source_post_urls);
+          body.append(block);
+        }
+      });
+      appendSection(doc, item, "\u0427\u0442\u043E \u0441\u0442\u043E\u0438\u0442 \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C", facts.things_to_check.length, (body) => {
+        const list = doc.createElement("ul");
+        for (const thing of facts.things_to_check) {
+          const row = doc.createElement("li");
+          row.textContent = thing;
+          list.append(row);
+        }
+        body.append(list);
+      });
+      appendSection(doc, item, "\u041F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F", facts.conflicts.length, (body) => {
+        const list = doc.createElement("ul");
+        for (const conflict of facts.conflicts) {
+          const row = doc.createElement("li");
+          row.textContent = conflict;
+          list.append(row);
+        }
+        body.append(list);
+      });
+      const raw = doc.createElement("details");
+      const rawCaption = doc.createElement("summary");
+      rawCaption.textContent = "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u043E\u043B\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0418\u0418";
+      const fullText = doc.createElement("pre");
+      fullText.textContent = report.raw_ai_response;
+      raw.append(rawCaption, fullText);
+      item.append(raw);
+      container.append(item);
+    }
+  }
+
   // src/core/utils.ts
   function parseTopicId(url) {
     try {
@@ -842,33 +1028,7 @@
       item.append(meta, link);
       recentPosts.append(item);
     }
-    renderSavedReports(state.recentReports);
-  }
-  function renderSavedReports(reports) {
-    savedReports.replaceChildren();
-    if (reports.length === 0) {
-      savedReports.textContent = "\u041F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u043E\u0442\u0432\u0435\u0442\u043E\u0432 \u0418\u0418.";
-      return;
-    }
-    for (const report of reports) {
-      const item = document.createElement("div");
-      item.className = "saved-report";
-      const title = document.createElement("strong");
-      title.textContent = report.structured_facts.title || "\u0421\u0432\u043E\u0434\u043A\u0430 \u0431\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F";
-      const meta = document.createElement("div");
-      meta.className = "post-meta";
-      meta.textContent = `${new Date(report.created_at).toLocaleString()} \xB7 Q&A: ${report.qa_entries.length}`;
-      const summary = document.createElement("p");
-      summary.textContent = report.parsed_summary.slice(0, 500);
-      const details = document.createElement("details");
-      const caption = document.createElement("summary");
-      caption.textContent = "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u043E\u043B\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0418\u0418";
-      const fullText = document.createElement("pre");
-      fullText.textContent = report.raw_ai_response;
-      details.append(caption, fullText);
-      item.append(title, meta, summary, details);
-      savedReports.append(item);
-    }
+    renderSavedReports(savedReports, state.recentReports);
   }
   function formatBytes(bytes) {
     if (bytes < 1024) return `${bytes} \u0411`;
@@ -929,6 +1089,15 @@
     }
   }
   function renderCollection(result) {
+    const dated = result.posts.map((post) => post.posted_at).filter((value) => Boolean(value) && Number.isFinite(Date.parse(value))).sort();
+    const undated = result.posts.length - dated.length;
+    result.diagnostics.push(`\u0421\u043E\u0431\u0440\u0430\u043D\u043E \u0441\u0442\u0440\u0430\u043D\u0438\u0446: ${result.pages.length}.`);
+    result.diagnostics.push(
+      `\u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u0432 \u0431\u0430\u0437\u0435 \u043F\u043E\u0441\u043B\u0435 \u0441\u0431\u043E\u0440\u0430: ${result.posts.length}. \u041F\u0435\u0440\u0438\u043E\u0434 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439: ${dated.length ? `${dated[0]?.slice(0, 10)} \u2014 ${dated.at(-1)?.slice(0, 10)}` : "\u0434\u0430\u0442\u044B \u043D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u044B"}.`
+    );
+    if (undated > 0) {
+      result.diagnostics.push(`\u041D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u043E \u0434\u0430\u0442 \u0443 ${undated} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u2014 \u0442\u0430\u043A\u0438\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0441\u043E\u0440\u0442\u0438\u0440\u0443\u044E\u0442\u0441\u044F \u043F\u043E \u043D\u043E\u043C\u0435\u0440\u0443 \u043F\u043E\u0441\u0442\u0430.`);
+    }
     renderDiagnostics(result.diagnostics);
     if (result.protection_message) {
       setStatus(result.protection_message, "warning");

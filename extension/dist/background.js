@@ -66,8 +66,130 @@
         return aTime - bTime;
       }
       if (Number.isFinite(aTime) !== Number.isFinite(bTime)) return Number.isFinite(aTime) ? -1 : 1;
+      const aId = Number.parseInt(a.post.post_id || "", 10);
+      const bId = Number.parseInt(b.post.post_id || "", 10);
+      if (Number.isFinite(aId) && Number.isFinite(bId) && aId !== bId) return aId - bId;
       return a.index - b.index;
     }).map(({ post }) => post);
+  }
+  var MONTH_BY_NAME = {
+    \u044F\u043D\u0432: 1,
+    \u0444\u0435\u0432: 2,
+    \u043C\u0430\u0440: 3,
+    \u0430\u043F\u0440: 4,
+    \u043C\u0430\u0439: 5,
+    \u043C\u0430\u044F: 5,
+    \u0438\u044E\u043D: 6,
+    \u0438\u044E\u043B: 7,
+    \u0430\u0432\u0433: 8,
+    \u0441\u0435\u043D: 9,
+    \u043E\u043A\u0442: 10,
+    \u043D\u043E\u044F: 11,
+    \u0434\u0435\u043A: 12,
+    jan: 1,
+    feb: 2,
+    mar: 3,
+    apr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    aug: 8,
+    sep: 9,
+    sept: 9,
+    oct: 10,
+    nov: 11,
+    dec: 12
+  };
+  var FORUM_DATE_PATTERN = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|\b\d{1,2}\s+[а-яa-z]{3,10}\.?\s+\d{4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|(?:^|[^\wа-яё])(?:сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*\d{1,2}:\d{2}|\b\d{1,2}:\d{2}\b/gi;
+  function firstDateLikeText(text) {
+    const matches = text.match(FORUM_DATE_PATTERN) || [];
+    const withTime = matches.find((item) => /\d{1,2}:\d{2}/.test(item));
+    return (withTime || matches[0] || "").trim();
+  }
+  function localDate(year, month, day, hour, minute, second) {
+    const date = new Date(year, month - 1, day, hour, minute, second);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    return date;
+  }
+  function expandYear(value) {
+    if (value.length === 4) return Number.parseInt(value, 10);
+    const short = Number.parseInt(value, 10);
+    return short >= 80 ? 1900 + short : 2e3 + short;
+  }
+  function parseForumDate(raw, reference = /* @__PURE__ */ new Date()) {
+    const text = raw.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    if (!text) return null;
+    const iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?\s*(Z|[+-]\d{2}:?\d{2})?/.exec(text);
+    if (iso) {
+      const [, year = "1970", month = "1", day = "1", hour = "00", minute = "00", second = "00", zone] = iso;
+      if (zone) {
+        const parsed2 = Date.parse(text);
+        return Number.isFinite(parsed2) ? new Date(parsed2) : null;
+      }
+      return localDate(
+        Number.parseInt(year, 10),
+        Number.parseInt(month, 10),
+        Number.parseInt(day, 10),
+        Number.parseInt(hour, 10),
+        Number.parseInt(minute, 10),
+        Number.parseInt(second, 10)
+      );
+    }
+    const numeric = /\b(\d{1,2})[./](\d{1,2})[./](\d{2,4})(?:\s*(?:,|г\.?)?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(
+      text
+    );
+    if (numeric) {
+      let day = Number.parseInt(numeric[1] || "0", 10);
+      let month = Number.parseInt(numeric[2] || "0", 10);
+      const year = expandYear(numeric[3] || "1970");
+      if (month > 12 && day <= 12) [day, month] = [month, day];
+      const hour = Number.parseInt(numeric[4] || "0", 10);
+      const minute = Number.parseInt(numeric[5] || "0", 10);
+      const second = Number.parseInt(numeric[6] || "0", 10);
+      const date = localDate(year, month, day, hour, minute, second);
+      if (date) return date;
+    }
+    const named = /\b(\d{1,2})\s+([а-яa-z]{3,10})\.?\s+(\d{4})(?:\s*(?:,|г\.?)?\s*(\d{1,2}):(\d{2}))?/i.exec(text);
+    if (named) {
+      const month = MONTH_BY_NAME[named[2]?.slice(0, 3).toLowerCase() || ""];
+      if (month) {
+        const date = localDate(
+          Number.parseInt(named[3] || "1970", 10),
+          month,
+          Number.parseInt(named[1] || "0", 10),
+          Number.parseInt(named[4] || "0", 10),
+          Number.parseInt(named[5] || "0", 10),
+          0
+        );
+        if (date) return date;
+      }
+    }
+    const relative = /(?:^|[^\wа-яё])(сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*(\d{1,2}):(\d{2})/i.exec(text);
+    if (relative) {
+      const shift = /вчера|yesterday/i.test(relative[1] || "") ? -1 : 0;
+      const base = new Date(reference.getFullYear(), reference.getMonth(), reference.getDate() + shift);
+      return localDate(
+        base.getFullYear(),
+        base.getMonth() + 1,
+        base.getDate(),
+        Number.parseInt(relative[2] || "0", 10),
+        Number.parseInt(relative[3] || "0", 10),
+        0
+      );
+    }
+    const timeOnly = /^(\d{1,2}):(\d{2})$/.exec(text);
+    if (timeOnly) {
+      return localDate(
+        reference.getFullYear(),
+        reference.getMonth() + 1,
+        reference.getDate(),
+        Number.parseInt(timeOnly[1] || "0", 10),
+        Number.parseInt(timeOnly[2] || "0", 10),
+        0
+      );
+    }
+    const parsed = Date.parse(text);
+    return Number.isFinite(parsed) ? new Date(parsed) : null;
   }
   function uniqueStrings(values) {
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
@@ -93,10 +215,10 @@
     const element = queryFirst(root, selectors);
     const elementTextValue = element ? normalizeWhitespace(element.getAttribute("datetime") || element.textContent || "") : "";
     const rootText = normalizeWhitespace(root.textContent || "");
-    const raw = elementTextValue || rootText.match(/\b\d{1,2}\.\d{1,2}\.\d{2,4}(?:,\s*|\s+)\d{1,2}:\d{2}\b/g)?.at(-1) || "";
+    const raw = elementTextValue || firstDateLikeText(rootText);
     if (!raw) return null;
-    const parsed = Date.parse(raw);
-    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : raw;
+    const parsed = parseForumDate(raw);
+    return parsed ? parsed.toISOString() : raw;
   }
   function extractQuotes(root, baseUrl) {
     const quotes = [];
@@ -1272,6 +1394,8 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       "4. \u042F\u0441\u043D\u043E \u0440\u0430\u0437\u043B\u0438\u0447\u0430\u0439 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E, \u0432\u0435\u0440\u043E\u044F\u0442\u043D\u043E, \u043D\u0435\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E, \u0443\u0441\u0442\u0430\u0440\u0435\u043B\u043E \u0438 \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u0442 \u0434\u0440\u0443\u0433 \u0434\u0440\u0443\u0433\u0443.",
       "5. \u041D\u0435 \u043E\u0442\u043A\u0440\u044B\u0432\u0430\u0439, \u043D\u0435 \u0432\u044B\u043F\u043E\u043B\u043D\u044F\u0439 \u0438 \u043D\u0435 \u0441\u0447\u0438\u0442\u0430\u0439 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u044B\u043C\u0438 \u0432\u043D\u0435\u0448\u043D\u0438\u0435 \u0444\u0430\u0439\u043B\u044B \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0442\u043E\u043C\u0443, \u0447\u0442\u043E \u043D\u0430 \u043D\u0438\u0445 \u0435\u0441\u0442\u044C \u0441\u0441\u044B\u043B\u043A\u0430. \u0421\u0441\u044B\u043B\u043A\u0438 \u043B\u0438\u0448\u044C \u0430\u043D\u043D\u043E\u0442\u0438\u0440\u0443\u0439.",
       "6. \u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043E\u0442\u0432\u0435\u0442\u043E\u043C \u043D\u0430 \u0446\u0438\u0442\u0430\u0442\u0443 \u0438\u043B\u0438 \u0434\u0440\u0443\u0433\u043E\u0439 \u043F\u043E\u0441\u0442. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u043F\u043E\u043B\u044F \xAB\u0426\u0438\u0442\u0430\u0442\u044B\xBB \u0438 \xAB\u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\xBB, \u0441\u0432\u044F\u0436\u0438 \u043E\u0442\u0432\u0435\u0442 \u0441 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u043C \u043F\u043E\u0441\u0442\u043E\u043C, \u043D\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u0439 \u0446\u0438\u0442\u0430\u0442\u0443 \u043A\u0430\u043A \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E. \u0415\u0441\u043B\u0438 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A \u043D\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D \u2014 \u0443\u043A\u0430\u0436\u0438, \u0447\u0442\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043D\u0435\u043F\u043E\u043B\u043D\u044B\u0439.",
+      `7. \u041E\u0431\u044A\u0451\u043C \u043E\u0442\u0432\u0435\u0442\u0430 \u0434\u043E\u043B\u0436\u0435\u043D \u0441\u043E\u043E\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C \u043E\u0431\u044A\u0451\u043C\u0443 \u043F\u0430\u043A\u0435\u0442\u0430: \u0437\u0434\u0435\u0441\u044C ${posts.length} \u043D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439. \u0415\u0441\u043B\u0438 \u0438\u0445 \u0431\u043E\u043B\u044C\u0448\u0435 40, \u0434\u0430\u0439 \u043D\u0435 \u043C\u0435\u043D\u044C\u0448\u0435 8 \u043F\u0443\u043D\u043A\u0442\u043E\u0432 \u0441\u0443\u043C\u043C\u0430\u0440\u043D\u043E \u0432 \u043D\u043E\u0432\u043E\u0441\u0442\u044F\u0445, \u0440\u0435\u0448\u0435\u043D\u0438\u044F\u0445 \u0438 \u0431\u0430\u0433\u0430\u0445 \u0438 \u043D\u0435 \u043C\u0435\u043D\u044C\u0448\u0435 6 Q&A-\u043A\u0430\u0440\u0442\u043E\u0447\u0435\u043A. \u041D\u0435 \u0440\u0430\u0441\u0442\u044F\u0433\u0438\u0432\u0430\u0439 \u0442\u0435\u043A\u0441\u0442 \u0432\u043E\u0434\u043E\u0439, \u043D\u043E \u0438 \u043D\u0435 \u0432\u044B\u0431\u0440\u0430\u0441\u044B\u0432\u0430\u0439 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0430\u043C\u0438 \u0444\u0430\u043A\u0442\u044B.`,
+      "8. \u0423 \u043A\u0430\u0436\u0434\u043E\u0433\u043E \u043F\u0443\u043D\u043A\u0442\u0430 \u0432 important_news, confirmed_decisions, bugs_and_problems \u0438 \u0443 \u043A\u0430\u0436\u0434\u043E\u0439 Q&A-\u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u0445\u043E\u0442\u044F \u0431\u044B \u043E\u0434\u0438\u043D \u0442\u043E\u0447\u043D\u044B\u0439 URL \u0438\u0441\u0445\u043E\u0434\u043D\u043E\u0433\u043E \u043F\u043E\u0441\u0442\u0430. \u041F\u0443\u043D\u043A\u0442\u044B \u0431\u0435\u0437 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0430 \u043D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439.",
       "",
       "## \u0424\u043E\u0440\u043C\u0430\u0442 \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D",
       "\u0412\u044B\u0432\u0435\u0434\u0438 \u043E\u0434\u0438\u043D \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u0441\u0445\u0435\u043C\u0435 \u043D\u0438\u0436\u0435. \u041F\u043E\u043B\u043D\u0430\u044F \u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F Markdown-\u0441\u0432\u043E\u0434\u043A\u0430 \u043E\u0431\u044F\u0437\u0430\u043D\u0430 \u043B\u0435\u0436\u0430\u0442\u044C \u0432 \u043F\u043E\u043B\u0435 `markdown_summary` (\u0441\u0442\u0440\u043E\u043A\u043E\u0439 \u0441 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u0430\u043C\u0438 `\\n`). \u0414\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u043F\u043E\u0441\u043B\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 `---MARKDOWN---` \u043C\u043E\u0436\u043D\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0442\u043E\u0442 \u0436\u0435 \u0442\u0435\u043A\u0441\u0442 \u2014 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442 \u0438 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0441 \u043F\u043E\u043B\u0435\u043C, \u0438 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u0441 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u0431\u043B\u043E\u043A\u043E\u043C. Markdown \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0434\u043D\u043E\u0439 \u043A\u043E\u0440\u043E\u0442\u043A\u043E\u0439 \u0444\u0440\u0430\u0437\u043E\u0439: \u043F\u043E\u0432\u0442\u043E\u0440\u0438 \u0432 \u043D\u0451\u043C \u0432\u0430\u0436\u043D\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0441\u043B\u0443\u0445\u0438, \u0441\u0441\u044B\u043B\u043A\u0438, \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0438 Q&A. \u0412\u0441\u0435 \u043C\u0430\u0441\u0441\u0438\u0432\u044B \u0434\u043E\u043B\u0436\u043D\u044B \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C, \u0434\u0430\u0436\u0435 \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u0443\u0441\u0442\u044B\u0435. \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0432 JSON \u043F\u043E\u043B\u044F \u0441 \u0434\u043E\u0433\u0430\u0434\u043A\u0430\u043C\u0438 \u0431\u0435\u0437 \u043F\u043E\u043C\u0435\u0442\u043A\u0438 \u0441\u0442\u0430\u0442\u0443\u0441\u0430.",
@@ -2475,6 +2599,13 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
         result.diagnostics.push(
           `Checkpoint \u0441\u043E\u0437\u0434\u0430\u043D \u043D\u0430 \u043F\u043E\u0441\u0442\u0435 ${checkpoint.post_id || checkpoint.fingerprint}. \u0418\u0441\u0442\u043E\u0440\u0438\u044F \u043D\u0435 \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D\u0430.`
         );
+        const firstPage = result.pages[0];
+        const newerUrl = firstPage ? normalizeUrl(firstPage.last_url || "", firstPage.url) : null;
+        if (firstPage && newerUrl && newerUrl !== firstPage.url) {
+          result.diagnostics.push(
+            `\u0412\u043D\u0438\u043C\u0430\u043D\u0438\u0435: \u0443 \u0442\u0435\u043C\u044B \u0435\u0441\u0442\u044C \u0431\u043E\u043B\u0435\u0435 \u043D\u043E\u0432\u0430\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 (${newerUrl}). Checkpoint \u0441\u043E\u0437\u0434\u0430\u043D \u043D\u0430 \u043E\u0442\u043A\u0440\u044B\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435, \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u0441\u0430\u043C\u044B\u0435 \u043D\u043E\u0432\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u0435\u0449\u0451 \u043D\u0435 \u0443\u0447\u0442\u0435\u043D\u044B. \u041D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043D\u043E\u0432\u044B\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\xBB.`
+          );
+        }
       }
       return { ok: true, collection: result };
     }

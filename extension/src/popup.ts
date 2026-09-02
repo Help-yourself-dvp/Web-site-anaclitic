@@ -1,4 +1,5 @@
 import { strToU8, zipSync } from 'fflate';
+import { renderSavedReports } from './core/report-view';
 import type { BackgroundRequest, BackgroundResponse, ExtensionState } from './core/messages';
 import type { CollectionResult } from './core/types';
 import { parseTopicId } from './core/utils';
@@ -138,34 +139,7 @@ function renderState(state: ExtensionState): void {
     item.append(meta, link);
     recentPosts.append(item);
   }
-  renderSavedReports(state.recentReports);
-}
-
-function renderSavedReports(reports: ExtensionState['recentReports']): void {
-  savedReports.replaceChildren();
-  if (reports.length === 0) {
-    savedReports.textContent = 'Пока нет сохранённых ответов ИИ.';
-    return;
-  }
-  for (const report of reports) {
-    const item = document.createElement('div');
-    item.className = 'saved-report';
-    const title = document.createElement('strong');
-    title.textContent = report.structured_facts.title || 'Сводка без названия';
-    const meta = document.createElement('div');
-    meta.className = 'post-meta';
-    meta.textContent = `${new Date(report.created_at).toLocaleString()} · Q&A: ${report.qa_entries.length}`;
-    const summary = document.createElement('p');
-    summary.textContent = report.parsed_summary.slice(0, 500);
-    const details = document.createElement('details');
-    const caption = document.createElement('summary');
-    caption.textContent = 'Открыть полный ответ ИИ';
-    const fullText = document.createElement('pre');
-    fullText.textContent = report.raw_ai_response;
-    details.append(caption, fullText);
-    item.append(title, meta, summary, details);
-    savedReports.append(item);
-  }
+  renderSavedReports(savedReports, state.recentReports);
 }
 
 function formatBytes(bytes: number): string {
@@ -235,6 +209,22 @@ async function withBusy<T>(action: () => Promise<T>): Promise<T | undefined> {
 }
 
 function renderCollection(result: CollectionResult): void {
+  // Показываем, что реально собрано, чтобы период и «нет новых сообщений»
+  // можно было проверить глазами, а не по косвенным признакам.
+  const dated = result.posts
+    .map((post) => post.posted_at)
+    .filter((value): value is string => Boolean(value) && Number.isFinite(Date.parse(value as string)))
+    .sort();
+  const undated = result.posts.length - dated.length;
+  result.diagnostics.push(`Собрано страниц: ${result.pages.length}.`);
+  result.diagnostics.push(
+    `Сообщений в базе после сбора: ${result.posts.length}. Период сообщений: ${
+      dated.length ? `${dated[0]?.slice(0, 10)} — ${dated.at(-1)?.slice(0, 10)}` : 'даты не распознаны'
+    }.`,
+  );
+  if (undated > 0) {
+    result.diagnostics.push(`Не распознано дат у ${undated} сообщений — такие сообщения сортируются по номеру поста.`);
+  }
   renderDiagnostics(result.diagnostics);
   if (result.protection_message) {
     setStatus(result.protection_message, 'warning');

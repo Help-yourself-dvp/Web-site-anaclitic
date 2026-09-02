@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
 import { fourPdaAdapter } from '../src/adapters';
+import { findLastPageUrl, findPreviousPageUrl } from '../src/adapters/pagination';
 import {
   checkpointMatches,
   deduplicatePosts,
@@ -13,8 +14,9 @@ import {
 } from '../src/core/collection';
 import { cleanUrlValue, importAiResponse, validateAiResponse } from '../src/core/importer';
 import { createAiPacket, createAiPacketBundle, createSingleAiPacket } from '../src/core/prompt';
-import type { ForumPost } from '../src/core/types';
-import { postKey } from '../src/core/utils';
+import { renderSavedReports } from '../src/core/report-view';
+import type { ForumPost, ReportRecord } from '../src/core/types';
+import { firstDateLikeText, parseForumDate, postKey, sortPostsChronologically } from '../src/core/utils';
 
 function post(id: string, body: string, postedAt = `2026-08-26T00:${id.padStart(2, '0')}:00.000Z`): ForumPost {
   return {
@@ -369,5 +371,157 @@ describe('импорт ответа ИИ в том виде, в котором �
     expect(packet.prompt_md).toContain('без HTML-экранирования');
     expect(packet.prompt_md).toContain('markdown_summary');
     expect(packet.prompt_md).toContain('---MARKDOWN---');
+  });
+});
+
+describe('даты сообщений форума', () => {
+  // Локальные компоненты, чтобы тест не зависел от часового пояса машины.
+  const local = (raw: string): string => {
+    const date = parseForumDate(raw, new Date(2026, 8, 2, 12, 0));
+    if (!date) return 'null';
+    return [date.getFullYear(), date.getMonth() + 1, date.getDate(), date.getHours(), date.getMinutes()].join('-');
+  };
+
+  it('читает русскую дату как день.месяц.год, а не месяц.день.год', () => {
+    // Раньше здесь работал Date.parse: «02.09.26» превращалось в 9 февраля,
+    // «08.09.26» — в 9 августа, а «31.08.26» вообще не распознавалось.
+    expect(local('02.09.26, 09:30')).toBe('2026-9-2-9-30');
+    expect(local('08.09.26, 12:00')).toBe('2026-9-8-12-0');
+    expect(local('10.07.25, 11:09')).toBe('2025-7-10-11-9');
+    expect(local('31.08.26, 23:52')).toBe('2026-8-31-23-52');
+    expect(local('13.08.26, 10:03')).toBe('2026-8-13-10-3');
+    expect(local('2026-09-02T09:30:00')).toBe('2026-9-2-9-30');
+    expect(local('Сегодня, 09:30')).toBe('2026-9-2-9-30');
+    expect(local('Вчера, 23:10')).toBe('2026-9-1-23-10');
+    expect(local('2 сентября 2026, 09:30')).toBe('2026-9-2-9-30');
+    expect(local('мусор без даты')).toBe('null');
+  });
+
+  it('берёт дату сообщения, а не дату регистрации или правки', () => {
+    expect(
+      firstDateLikeText(
+        'Иван Регистрация: 01.01.24 Сообщений: 12 Сообщение #12345 31.08.26, 23:52 текст отредактировано 01.09.26, 10:00',
+      ),
+    ).toBe('31.08.26, 23:52');
+  });
+
+  it('сентябрьский пост 4PDA сохраняется сентябрём, а не февралём', () => {
+    const { document } = parseHTML(`
+      <table><tr>
+        <td class="post2"><span class="normalname"><a href="?showuser=1">Иван</a></span><span class="postdetails">Регистрация: 01.01.24</span></td>
+        <td class="post2" id="post-main-999"><div class="postcolor" id="post-999">Новое сообщение от 2 сентября</div>
+          <a href="?showtopic=1108618&view=findpost&p=999">#999</a> 02.09.26, 09:30</td>
+      </tr></table>`);
+    const result = fourPdaAdapter.parse(
+      document as unknown as Document,
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13620',
+      { sourceId: '4pda:1108618', topicId: '1108618', imageMode: 'links', imageKeywords: [], manualSelection: null },
+    );
+    const postedAt = result.posts[0]?.posted_at || '';
+    const date = new Date(postedAt);
+    expect(Number.isFinite(date.getTime())).toBe(true);
+    expect(date.getMonth() + 1).toBe(9);
+    expect(date.getDate()).toBe(2);
+  });
+
+  it('период в промпте заканчивается самым новым сообщением, а не августом', () => {
+    const august = { ...post('1', 'старое'), posted_at: new Date(2026, 7, 31, 23, 52).toISOString() };
+    const september = { ...post('2', 'новое'), posted_at: new Date(2026, 8, 2, 9, 30).toISOString() };
+    const packet = createAiPacket([august, september]);
+    const line = packet.prompt_md.split('\n').find((item) => item.startsWith('Период новых сообщений'));
+    expect(line).toContain(september.posted_at as string);
+    expect(line?.endsWith(`— ${september.posted_at}`)).toBe(true);
+    expect(packet.prompt_md).toContain('Объём ответа должен соответствовать объёму пакета');
+  });
+
+  it('сообщения без даты сортируются по номеру поста, а не по порядку обхода страниц', () => {
+    const undatedNew = { ...post('900', 'новое без даты'), posted_at: null };
+    const undatedOld = { ...post('800', 'старое без даты'), posted_at: null };
+    expect(sortPostsChronologically([undatedNew, undatedOld]).map((item) => item.post_id)).toEqual(['800', '900']);
+  });
+});
+
+describe('показ сохранённой выжимки в popup', () => {
+  const imported = importAiResponse(
+    readFileSync(fileURLToPath(new URL('./fixtures/ai-answer-2026-09.json', import.meta.url)), 'utf8'),
+    '4pda:1108618',
+    '1108618',
+  );
+  const longReport: ReportRecord = {
+    ...imported.report,
+    parsed_summary: `## Сводка\n${'длинная строка сводки\n'.repeat(80)}`,
+  };
+
+  const render = (report: ReportRecord) => {
+    const { document } = parseHTML('<div id="reports"></div>');
+    const container = document.getElementById('reports') as unknown as HTMLElement;
+    renderSavedReports(container, [report]);
+    return { container, text: container.textContent || '' };
+  };
+
+  it('показывает сводку целиком, а не первые 500 символов', () => {
+    const { container, text } = render(longReport);
+    expect(longReport.parsed_summary.length).toBeGreaterThan(500);
+    expect(text).toContain('длинная строка сводки');
+    expect(text).toContain(longReport.parsed_summary.trim().slice(-20));
+    expect(container.querySelector('.report-summary')?.textContent).toBe(longReport.parsed_summary);
+  });
+
+  it('показывает разделы, карточки Q&A и кликабельные источники', () => {
+    const { container, text } = render(imported.report);
+    expect(text).toContain('Важные новости: 1');
+    expect(text).toContain('Вопросы и ответы: 1');
+    expect(text).toContain('Как отключить быструю зарядку (100 Вт) на время?');
+    expect(text).toContain('Карточек Q&A: 1');
+    expect(text).toContain('Период:');
+    const links = Array.from(container.querySelectorAll('a')).map((anchor) => anchor.getAttribute('href'));
+    expect(links).toContain('https://4pda.to/forum/index.php?showtopic=1108618&st=13260');
+    expect(links).toContain('https://f-droid.org/packages/net.typeblog.shelter/');
+  });
+
+  it('без отчётов показывает понятную подсказку', () => {
+    const { document } = parseHTML('<div id="reports"></div>');
+    const container = document.getElementById('reports') as unknown as HTMLElement;
+    renderSavedReports(container, []);
+    expect(container.textContent).toBe('Пока нет сохранённых ответов ИИ.');
+  });
+});
+
+describe('пагинация 4PDA в реальной разметке', () => {
+  // Строки пагинатора скопированы с живой страницы темы 1108618 (682 страницы).
+  const pager = `
+    <html><body>
+      682 страниц
+      <a href="https://4pda.to/forum/index.php?showtopic=1108618" title="На первую страницу">«</a>
+      <a href="https://4pda.to/forum/index.php?showtopic=1108618&st=13580" title="Предыдущая страница">&lt;</a>
+      <a href="https://4pda.to/forum/index.php?showtopic=1108618&st=13560" title="679">679</a>
+      <a href="https://4pda.to/forum/index.php?showtopic=1108618&st=13580" title="680">680</a>
+      681
+      <a href="https://4pda.to/forum/index.php?showtopic=1108618&st=13620" title="682">682</a>
+      <a href="https://4pda.to/forum/index.php?showtopic=1108618&st=13620" title="Следующая страница">&gt;</a>
+      <a href="https://4pda.to/forum/index.php?showtopic=1108618&st=13620" title="На последнюю страницу">»</a>
+    </body></html>`;
+
+  it('находит последнюю страницу темы, чтобы самые новые сообщения попали в сбор', () => {
+    const { document } = parseHTML(pager);
+    const pageUrl = 'https://4pda.to/forum/index.php?showtopic=1108618&st=13600';
+    expect(findLastPageUrl(document as unknown as Document, pageUrl)).toBe(
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13620',
+    );
+  });
+
+  it('шагает на предыдущую страницу без пропусков', () => {
+    const { document } = parseHTML(pager);
+    const pageUrl = 'https://4pda.to/forum/index.php?showtopic=1108618&st=13600';
+    expect(findPreviousPageUrl(document as unknown as Document, pageUrl)).toBe(
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13580',
+    );
+  });
+
+  it('с первой страницы темы тоже находит последнюю', () => {
+    const { document } = parseHTML(pager);
+    expect(findLastPageUrl(document as unknown as Document, 'https://4pda.to/forum/index.php?showtopic=1108618')).toBe(
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13620',
+    );
   });
 });

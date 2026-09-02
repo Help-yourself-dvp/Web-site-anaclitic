@@ -31,7 +31,7 @@ import type {
   PacketResponse,
 } from './core/messages';
 import type { CollectionResult, ForumPost, SourceRecord } from './core/types';
-import { nowIso, parseTopicId, postKey, sortPostsChronologically } from './core/utils';
+import { normalizeUrl, nowIso, parseTopicId, postKey, sortPostsChronologically } from './core/utils';
 
 async function activeTab(): Promise<chrome.tabs.Tab> {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -247,6 +247,13 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
       result.diagnostics.push(
         `Checkpoint создан на посте ${checkpoint.post_id || checkpoint.fingerprint}. История не импортирована.`,
       );
+      const firstPage = result.pages[0];
+      const newerUrl = firstPage ? normalizeUrl(firstPage.last_url || '', firstPage.url) : null;
+      if (firstPage && newerUrl && newerUrl !== firstPage.url) {
+        result.diagnostics.push(
+          `Внимание: у темы есть более новая страница (${newerUrl}). Checkpoint создан на открытой странице, поэтому самые новые сообщения ещё не учтены. Нажмите «Проверить новые сообщения».`,
+        );
+      }
     }
     return { ok: true, collection: result };
   }
