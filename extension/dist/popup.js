@@ -782,6 +782,33 @@
     fill(body);
     target.append(details);
   }
+  function titleKey(title) {
+    return title.toLowerCase().replace(/[«»"'`*_\-–—]/g, "").replace(/\s+/g, " ").trim();
+  }
+  function groupSections(sections) {
+    const groups = /* @__PURE__ */ new Map();
+    let merged = 0;
+    for (const [caption, list] of sections) {
+      for (const item of list) {
+        const key = titleKey(item.title) || `${caption}:${merged}`;
+        const existing = groups.get(key);
+        if (existing) {
+          merged += 1;
+          if (!existing.also.includes(caption)) existing.also.push(caption);
+          existing.item = {
+            ...existing.item,
+            details: existing.item.details || item.details,
+            status: existing.item.status || item.status,
+            source_post_urls: [.../* @__PURE__ */ new Set([...existing.item.source_post_urls, ...item.source_post_urls])],
+            external_urls: [.../* @__PURE__ */ new Set([...existing.item.external_urls, ...item.external_urls])]
+          };
+          continue;
+        }
+        groups.set(key, { caption, item, also: [] });
+      }
+    }
+    return { groups, merged };
+  }
   function renderSavedReports(container, reports) {
     const doc = container.ownerDocument;
     container.replaceChildren();
@@ -801,6 +828,7 @@
         ["\u0411\u0430\u0433\u0438 \u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B", facts.bugs_and_problems],
         ["\u0421\u043B\u0443\u0445\u0438 \u0438 \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F", facts.rumors]
       ];
+      const { groups, merged } = groupSections(sections);
       const sourceCount = new Set(
         sections.flatMap(([, list]) => list.flatMap((entry) => entry.source_post_urls)).filter(Boolean)
       ).size;
@@ -810,20 +838,28 @@
         new Date(report.created_at).toLocaleString(),
         formatPeriod(facts.period.from, facts.period.to),
         `\u041A\u0430\u0440\u0442\u043E\u0447\u0435\u043A Q&A: ${report.qa_entries.length}`,
-        `\u041F\u0443\u043D\u043A\u0442\u043E\u0432 \u0432 \u0440\u0430\u0437\u0434\u0435\u043B\u0430\u0445: ${sections.reduce((total, [, list]) => total + list.length, 0)}`,
+        `\u041F\u0443\u043D\u043A\u0442\u043E\u0432 \u0432 \u0440\u0430\u0437\u0434\u0435\u043B\u0430\u0445: ${groups.size}`,
+        merged > 0 ? `\u041E\u0431\u044A\u0435\u0434\u0438\u043D\u0435\u043D\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432: ${merged}` : "",
         `\u0421\u0441\u044B\u043B\u043E\u043A \u043D\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438: ${sourceCount}`
-      ].join(" \xB7 ");
+      ].filter(Boolean).join(" \xB7 ");
       const summary = doc.createElement("div");
       summary.className = "report-summary";
       summary.textContent = report.parsed_summary || "\u0421\u0432\u043E\u0434\u043A\u0430 \u043F\u0443\u0441\u0442\u0430\u044F.";
       item.append(title, meta, summary);
-      for (const [caption, list] of sections) {
-        appendSection(doc, item, caption, list.length, (body) => {
-          for (const entry of list) {
-            appendItemBlock(doc, body, entry.title, entry.details, entry.status, [
-              ...entry.source_post_urls,
-              ...entry.external_urls
+      for (const [caption] of sections) {
+        const own = [...groups.values()].filter((entry) => entry.caption === caption);
+        appendSection(doc, item, caption, own.length, (body) => {
+          for (const entry of own) {
+            appendItemBlock(doc, body, entry.item.title, entry.item.details, entry.item.status, [
+              ...entry.item.source_post_urls,
+              ...entry.item.external_urls
             ]);
+            if (entry.also.length > 0) {
+              const note = doc.createElement("div");
+              note.className = "post-meta";
+              note.textContent = `\u0422\u043E \u0436\u0435 \u0441\u0430\u043C\u043E\u0435 \u0443\u043F\u043E\u043C\u0438\u043D\u0430\u043B\u043E\u0441\u044C \u0432: ${entry.also.join(", ")}`;
+              body.append(note);
+            }
           }
         });
       }
@@ -1176,10 +1212,16 @@
       await refresh();
     });
   }
-  async function collect(mode) {
+  async function collect(mode, fromOpenPage = false) {
     await withBusy(async () => {
       setStatus(mode === "new" ? "\u0418\u0434\u0451\u0442 \u043F\u043E\u0438\u0441\u043A checkpoint \u0438 \u043D\u043E\u0432\u044B\u0445 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u2026" : "\u0418\u0434\u0451\u0442 \u0440\u0430\u0437\u0431\u043E\u0440 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B\u2026", "neutral");
-      const response = await send({ type: "collect", mode, url: activeUrl, maxPages: Number(pagesInput.value) });
+      const response = await send({
+        type: "collect",
+        mode,
+        url: activeUrl,
+        maxPages: Number(pagesInput.value),
+        fromOpenPage
+      });
       if (!response.ok) {
         setStatus(response.error, "error");
         renderDiagnostics(response.details || []);
@@ -1371,7 +1413,10 @@ ${firstChunk.prompt_md}`;
         });
         importResult.append(list);
       }
-      setStatus("\u041E\u0442\u0432\u0435\u0442 \u0418\u0418 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E.", result.valid_json ? "success" : "warning");
+      setStatus(
+        result.duplicate ? "\u0422\u0430\u043A\u043E\u0439 \u043E\u0442\u0432\u0435\u0442 \u0443\u0436\u0435 \u0431\u044B\u043B \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D \u2014 \u0432\u0442\u043E\u0440\u0430\u044F \u043A\u043E\u043F\u0438\u044F \u043D\u0435 \u0441\u043E\u0437\u0434\u0430\u0432\u0430\u043B\u0430\u0441\u044C." : "\u041E\u0442\u0432\u0435\u0442 \u0418\u0418 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D \u043B\u043E\u043A\u0430\u043B\u044C\u043D\u043E.",
+        result.duplicate ? "warning" : result.valid_json ? "success" : "warning"
+      );
       await refresh();
       const reportsPanel = savedReports.closest("details");
       if (reportsPanel) reportsPanel.open = true;
@@ -1390,6 +1435,12 @@ ${firstChunk.prompt_md}`;
   clearAllButton.addEventListener("click", () => void clearAllData());
   $("#checkpointButton").addEventListener("click", () => void collect("checkpoint"));
   $("#historyButton").addEventListener("click", () => void collect("history"));
+  $("#historyFromHereButton").addEventListener("click", () => void collect("history", true));
+  $("#collapseReportsButton").addEventListener("click", () => {
+    savedReports.querySelectorAll("details").forEach((details) => {
+      details.open = false;
+    });
+  });
   $("#collectButton").addEventListener("click", () => void collect("new"));
   $("#packageButton").addEventListener("click", () => void createPackage("single"));
   splitPackageButton.addEventListener("click", () => void createPackage("split"));

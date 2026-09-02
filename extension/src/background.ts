@@ -213,6 +213,7 @@ async function collect(request: Extract<BackgroundRequest, { type: 'collect' }>)
     checkpointKey,
     checkpointUrl: source.last_checkpoint_url,
     checkpointPageUrl: checkpointPageUrl || null,
+    fromOpenPage: request.fromOpenPage === true,
     startPageUrl: resumePageUrl || checkpointPageUrl || source.last_checkpoint_url || null,
     resumePageUrl,
     knownKeys,
@@ -527,6 +528,15 @@ async function importResponse(request: Extract<BackgroundRequest, { type: 'impor
     }
   }
   const result = importAiResponse(request.raw, sourceId, topicId);
+  const storedReports = sourceId ? await getReports(sourceId) : [];
+  const duplicate = storedReports.find((item) => item.raw_ai_response.trim() === request.raw.trim());
+  if (duplicate) {
+    result.duplicate = true;
+    result.warnings.push(
+      `Такой ответ уже сохранён ${new Date(duplicate.created_at).toLocaleString()}. Вторая копия не создавалась.`,
+    );
+    return { ok: true, importResult: result };
+  }
   await putReport(result.report);
   const companionWarning = await syncCompanion('/api/reports', { report: result.report });
   if (companionWarning) result.warnings.push(companionWarning);

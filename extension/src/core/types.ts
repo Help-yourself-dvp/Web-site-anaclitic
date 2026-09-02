@@ -204,6 +204,8 @@ export interface ImportResult {
   report: ReportRecord;
   valid_json: boolean;
   repaired_json: boolean;
+  /** Такой ответ уже лежит в базе: копия не создаётся, чтобы не плодить одинаковые выжимки. */
+  duplicate: boolean;
   warnings: string[];
   unrecognized_qa: string[];
 }

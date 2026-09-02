@@ -29,19 +29,52 @@ export function titleFromDocument(document: Document): string {
   return normalizeWhitespace(document.title || '') || 'Без названия';
 }
 
-export function parsePostedAt(root: ParentNode, selectors: string[]): string | null {
-  const element = queryFirst(root, selectors);
-  const elementTextValue = element
-    ? normalizeWhitespace(element.getAttribute('datetime') || element.textContent || '')
-    : '';
-  const rootText = normalizeWhitespace(root.textContent || '');
-  // The post stamp is printed right after the «Сообщение #N» permalink and
-  // before the body, so the first stamp in the row is the one we need. The last
-  // one can be an «отредактировано …» mark from inside the message.
-  const raw = elementTextValue || firstDateLikeText(rootText);
-  if (!raw) return null;
-  const parsed = parseForumDate(raw);
-  return parsed ? parsed.toISOString() : raw;
+const POST_BODY_MARKERS =
+  'div.postcolor, .post_content, .postcontent, .post-content, .post_body, .post-body, .entry-content';
+
+/**
+ * Where a post stamp can live. The classic 4PDA layout keeps it in the table
+ * row, newer layouts keep it in a header that is a sibling of the body inside a
+ * common wrapper. Roots are ordered narrow to wide; a wide ancestor is accepted
+ * only while it holds a single post body, so we never take a neighbour's date.
+ */
+export function dateCandidateRoots(element: Element, metadataRoot: Element): ParentNode[] {
+  const roots: ParentNode[] = [];
+  const push = (node: ParentNode | null | undefined): void => {
+    if (node && !roots.includes(node)) roots.push(node);
+  };
+  push(metadataRoot);
+  push(element.closest('td[id^="post-main-"], td[id*="post-main-"]')?.parentElement);
+  push(element.closest('tr'));
+  let parent: Element | null = element.parentElement;
+  for (let depth = 0; parent && depth < 4; depth += 1) {
+    if (parent.querySelectorAll(POST_BODY_MARKERS).length > 1) break;
+    push(parent);
+    parent = parent.parentElement;
+  }
+  push(element);
+  return roots;
+}
+
+export function parsePostedAt(roots: ParentNode | ParentNode[], selectors: string[]): string | null {
+  const list = Array.isArray(roots) ? roots : [roots];
+  let unparsedRaw = '';
+  for (const root of list) {
+    const element = queryFirst(root, selectors);
+    const elementTextValue = element
+      ? normalizeWhitespace(element.getAttribute('datetime') || element.textContent || '')
+      : '';
+    const rootText = normalizeWhitespace(root.textContent || '');
+    // The post stamp is printed right after the «Сообщение #N» permalink and
+    // before the body, so the first stamp in the row is the one we need. The
+    // last one can be an «отредактировано …» mark from inside the message.
+    const raw = elementTextValue || firstDateLikeText(rootText);
+    if (!raw) continue;
+    const parsed = parseForumDate(raw);
+    if (parsed) return parsed.toISOString();
+    if (!unparsedRaw) unparsedRaw = raw;
+  }
+  return unparsedRaw || null;
 }
 
 export function extractQuotes(root: Element, baseUrl: string): Quote[] {
@@ -225,7 +258,10 @@ export function extractPost(
     elementText(metadataRoot, config.authorSelectors) ||
     elementText(element, config.authorSelectors) ||
     'Неизвестный автор';
-  const postedAt = parsePostedAt(dateRoot || metadataRoot, config.dateSelectors);
+  const postedAt = parsePostedAt(
+    dateRoot ? [dateRoot] : dateCandidateRoots(element, metadataRoot),
+    config.dateSelectors,
+  );
   const quotes = extractQuotes(bodyRoot, pageUrl);
   const links = extractLinks(bodyRoot, pageUrl);
   const replyToUrls = extractReplyLinks(bodyRoot, pageUrl);

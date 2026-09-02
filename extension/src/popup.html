@@ -60,11 +60,14 @@
         <div class="button-grid">
           <button id="checkpointButton" class="secondary">Запомнить это место</button>
           <button id="historyButton" class="secondary">Загрузить последние страницы</button>
+          <button id="historyFromHereButton" class="secondary">Загрузить страницы от открытой</button>
           <button id="collectButton" class="primary wide">Проверить новые сообщения</button>
         </div>
         <p class="hint">
-          «Запомнить это место» — безопасное начало без загрузки старой истории. В обычной проверке расширение само
-          найдёт последнюю страницу темы по сохранённой точке и пойдёт назад до неё.
+          «Загрузить страницы от открытой» — откройте нужную старую страницу темы и нажмите эту кнопку: расширение
+          пойдёт назад от неё и добавит старые сообщения в базу, их можно отдать ИИ отдельным пакетом. «Запомнить это
+          место» — безопасное начало без загрузки старой истории. В обычной проверке расширение само найдёт последнюю
+          страницу темы по сохранённой точке и пойдёт назад до неё.
         </p>
       </section>
 
@@ -159,6 +162,9 @@
           <h2>7. Сохранённые выжимки</h2>
           <span class="badge neutral">ищите здесь</span>
         </summary>
+        <div class="control-row">
+          <button id="collapseReportsButton" class="secondary">Свернуть все разделы</button>
+        </div>
         <div id="savedReports" class="saved-reports"></div>
         <p id="storageInfo" class="hint"></p>
         <p class="hint">

@@ -824,6 +824,7 @@ export function importAiResponse(raw: string, sourceId: string, topicId: string)
     report,
     valid_json: validJson,
     repaired_json: repairedJson,
+    duplicate: false,
     warnings,
     unrecognized_qa: validJson ? [] : markdown.unrecognized,
   };

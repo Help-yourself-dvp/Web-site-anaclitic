@@ -11,7 +11,7 @@ import type {
 
 export type BackgroundRequest =
   | { type: 'get-state'; url: string }
-  | { type: 'collect'; mode: 'checkpoint' | 'history' | 'new'; url: string; maxPages?: number }
+  | { type: 'collect'; mode: 'checkpoint' | 'history' | 'new'; url: string; maxPages?: number; fromOpenPage?: boolean }
   | { type: 'create-package'; mode: 'single' | 'split' }
   | { type: 'export-local' }
   | { type: 'reset-source'; url: string }
@@ -84,6 +84,8 @@ export type BackgroundResponse =
 
 export interface CollectorOptions {
   mode: 'checkpoint' | 'history' | 'new';
+  /** Не искать последнюю страницу темы: идти назад от той страницы, что открыта. */
+  fromOpenPage?: boolean;
   source: SourceRecord;
   maxPages: number;
   delayMs: number;

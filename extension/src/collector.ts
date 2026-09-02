@@ -327,7 +327,10 @@ async function runCollector(options: CollectorOptions): Promise<CollectionResult
   // user opened as a starting point. In both cases the "last page" link lets us
   // find page 700 without making the user calculate its number manually.
   const shouldFindLatest =
-    !options.resumePageUrl && (options.mode === 'history' || (options.mode === 'new' && options.startPageUrl));
+    !options.resumePageUrl &&
+    !options.fromOpenPage &&
+    (options.mode === 'history' || (options.mode === 'new' && options.startPageUrl));
+  if (options.fromOpenPage) diagnostics.push('Иду назад от открытой страницы, последняя страница темы не ищется.');
   if (shouldFindLatest) {
     try {
       if (options.mode === 'new' && options.startPageUrl) {

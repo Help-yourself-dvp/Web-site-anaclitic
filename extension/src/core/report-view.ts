@@ -1,4 +1,4 @@
-import type { ReportRecord } from './types';
+import type { AiSectionItem, ReportRecord } from './types';
 
 const STATUS_LABELS: Record<string, string> = {
   confirmed: 'подтверждено',
@@ -94,6 +94,49 @@ function appendSection(
   target.append(details);
 }
 
+export /** Один и тот же факт ИИ часто кладёт в несколько разделов — для чтения это лишний шум. */
+function titleKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[«»"'`*_\-–—]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+interface GroupedItem {
+  caption: string;
+  item: AiSectionItem;
+  also: string[];
+}
+
+function groupSections(sections: ReadonlyArray<readonly [string, AiSectionItem[]]>): {
+  groups: Map<string, GroupedItem>;
+  merged: number;
+} {
+  const groups = new Map<string, GroupedItem>();
+  let merged = 0;
+  for (const [caption, list] of sections) {
+    for (const item of list) {
+      const key = titleKey(item.title) || `${caption}:${merged}`;
+      const existing = groups.get(key);
+      if (existing) {
+        merged += 1;
+        if (!existing.also.includes(caption)) existing.also.push(caption);
+        existing.item = {
+          ...existing.item,
+          details: existing.item.details || item.details,
+          status: existing.item.status || item.status,
+          source_post_urls: [...new Set([...existing.item.source_post_urls, ...item.source_post_urls])],
+          external_urls: [...new Set([...existing.item.external_urls, ...item.external_urls])],
+        };
+        continue;
+      }
+      groups.set(key, { caption, item, also: [] });
+    }
+  }
+  return { groups, merged };
+}
+
 export function renderSavedReports(container: HTMLElement, reports: ReportRecord[]): void {
   const doc = container.ownerDocument;
   container.replaceChildren();
@@ -115,6 +158,7 @@ export function renderSavedReports(container: HTMLElement, reports: ReportRecord
       ['Баги и проблемы', facts.bugs_and_problems],
       ['Слухи и противоречия', facts.rumors],
     ] as const;
+    const { groups, merged } = groupSections(sections);
     const sourceCount = new Set(
       sections.flatMap(([, list]) => list.flatMap((entry) => entry.source_post_urls)).filter(Boolean),
     ).size;
@@ -125,9 +169,12 @@ export function renderSavedReports(container: HTMLElement, reports: ReportRecord
       new Date(report.created_at).toLocaleString(),
       formatPeriod(facts.period.from, facts.period.to),
       `Карточек Q&A: ${report.qa_entries.length}`,
-      `Пунктов в разделах: ${sections.reduce((total, [, list]) => total + list.length, 0)}`,
+      `Пунктов в разделах: ${groups.size}`,
+      merged > 0 ? `Объединено повторов: ${merged}` : '',
       `Ссылок на источники: ${sourceCount}`,
-    ].join(' · ');
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
     const summary = doc.createElement('div');
     summary.className = 'report-summary';
@@ -135,13 +182,20 @@ export function renderSavedReports(container: HTMLElement, reports: ReportRecord
 
     item.append(title, meta, summary);
 
-    for (const [caption, list] of sections) {
-      appendSection(doc, item, caption, list.length, (body) => {
-        for (const entry of list) {
-          appendItemBlock(doc, body, entry.title, entry.details, entry.status, [
-            ...entry.source_post_urls,
-            ...entry.external_urls,
+    for (const [caption] of sections) {
+      const own = [...groups.values()].filter((entry) => entry.caption === caption);
+      appendSection(doc, item, caption, own.length, (body) => {
+        for (const entry of own) {
+          appendItemBlock(doc, body, entry.item.title, entry.item.details, entry.item.status, [
+            ...entry.item.source_post_urls,
+            ...entry.item.external_urls,
           ]);
+          if (entry.also.length > 0) {
+            const note = doc.createElement('div');
+            note.className = 'post-meta';
+            note.textContent = `То же самое упоминалось в: ${entry.also.join(', ')}`;
+            body.append(note);
+          }
         }
       });
     }

@@ -192,14 +192,38 @@
   function titleFromDocument(document2) {
     return normalizeWhitespace(document2.title || "") || "\u0411\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F";
   }
-  function parsePostedAt(root, selectors) {
-    const element = queryFirst(root, selectors);
-    const elementTextValue = element ? normalizeWhitespace(element.getAttribute("datetime") || element.textContent || "") : "";
-    const rootText = normalizeWhitespace(root.textContent || "");
-    const raw = elementTextValue || firstDateLikeText(rootText);
-    if (!raw) return null;
-    const parsed = parseForumDate(raw);
-    return parsed ? parsed.toISOString() : raw;
+  var POST_BODY_MARKERS = "div.postcolor, .post_content, .postcontent, .post-content, .post_body, .post-body, .entry-content";
+  function dateCandidateRoots(element, metadataRoot) {
+    const roots = [];
+    const push = (node) => {
+      if (node && !roots.includes(node)) roots.push(node);
+    };
+    push(metadataRoot);
+    push(element.closest('td[id^="post-main-"], td[id*="post-main-"]')?.parentElement);
+    push(element.closest("tr"));
+    let parent = element.parentElement;
+    for (let depth = 0; parent && depth < 4; depth += 1) {
+      if (parent.querySelectorAll(POST_BODY_MARKERS).length > 1) break;
+      push(parent);
+      parent = parent.parentElement;
+    }
+    push(element);
+    return roots;
+  }
+  function parsePostedAt(roots, selectors) {
+    const list = Array.isArray(roots) ? roots : [roots];
+    let unparsedRaw = "";
+    for (const root of list) {
+      const element = queryFirst(root, selectors);
+      const elementTextValue = element ? normalizeWhitespace(element.getAttribute("datetime") || element.textContent || "") : "";
+      const rootText = normalizeWhitespace(root.textContent || "");
+      const raw = elementTextValue || firstDateLikeText(rootText);
+      if (!raw) continue;
+      const parsed = parseForumDate(raw);
+      if (parsed) return parsed.toISOString();
+      if (!unparsedRaw) unparsedRaw = raw;
+    }
+    return unparsedRaw || null;
   }
   function extractQuotes(root, baseUrl) {
     const quotes = [];
@@ -319,7 +343,10 @@
     }
     const canonicalPostUrl = permalinkUrl || fallbackPostUrl;
     const author = elementText(authorRoot || metadataRoot, config.authorSelectors) || elementText(metadataRoot, config.authorSelectors) || elementText(element, config.authorSelectors) || "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0430\u0432\u0442\u043E\u0440";
-    const postedAt = parsePostedAt(dateRoot || metadataRoot, config.dateSelectors);
+    const postedAt = parsePostedAt(
+      dateRoot ? [dateRoot] : dateCandidateRoots(element, metadataRoot),
+      config.dateSelectors
+    );
     const quotes = extractQuotes(bodyRoot, pageUrl);
     const links = extractLinks(bodyRoot, pageUrl);
     const replyToUrls = extractReplyLinks(bodyRoot, pageUrl);
@@ -547,6 +574,13 @@
       }
       if (posts.length < elements.length) {
         diagnostics.push(`4PDA: \u0438\u0437 ${elements.length} \u0431\u043B\u043E\u043A\u043E\u0432 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u043E ${posts.length} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439.`);
+      }
+      const undatedPosts = posts.filter((post) => !post.posted_at);
+      if (undatedPosts.length > 0) {
+        const sample = normalizeWhitespace(elements[0]?.textContent || "").slice(0, 160);
+        diagnostics.push(
+          `4PDA: \u0443 ${undatedPosts.length} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u0430 \u0434\u0430\u0442\u0430. \u041D\u0430\u0447\u0430\u043B\u043E \u043F\u0435\u0440\u0432\u043E\u0433\u043E \u0431\u043B\u043E\u043A\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B: \xAB${sample}\xBB.`
+        );
       }
       return {
         title: pageTitle(document2),
@@ -991,7 +1025,8 @@ ${html.slice(0, 12e4).toLocaleLowerCase()}`;
         );
       }
     }
-    const shouldFindLatest = !options.resumePageUrl && (options.mode === "history" || options.mode === "new" && options.startPageUrl);
+    const shouldFindLatest = !options.resumePageUrl && !options.fromOpenPage && (options.mode === "history" || options.mode === "new" && options.startPageUrl);
+    if (options.fromOpenPage) diagnostics.push("\u0418\u0434\u0443 \u043D\u0430\u0437\u0430\u0434 \u043E\u0442 \u043E\u0442\u043A\u0440\u044B\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B, \u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0430 \u0442\u0435\u043C\u044B \u043D\u0435 \u0438\u0449\u0435\u0442\u0441\u044F.");
     if (shouldFindLatest) {
       try {
         if (options.mode === "new" && options.startPageUrl) {

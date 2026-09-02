@@ -431,7 +431,7 @@ describe('даты сообщений форума', () => {
     const line = packet.prompt_md.split('\n').find((item) => item.startsWith('Период новых сообщений'));
     expect(line).toContain(september.posted_at as string);
     expect(line?.endsWith(`— ${september.posted_at}`)).toBe(true);
-    expect(packet.prompt_md).toContain('Объём ответа должен соответствовать объёму пакета');
+    expect(packet.prompt_md).toContain('Цель отчёта — не количество пунктов');
   });
 
   it('сообщения без даты сортируются по номеру поста, а не по порядку обхода страниц', () => {
@@ -523,5 +523,117 @@ describe('пагинация 4PDA в реальной разметке', () => {
     expect(findLastPageUrl(document as unknown as Document, 'https://4pda.to/forum/index.php?showtopic=1108618')).toBe(
       'https://4pda.to/forum/index.php?showtopic=1108618&st=13620',
     );
+  });
+});
+
+describe('дата в разметке, где шапка поста — сосед тела', () => {
+  it('находит дату в общем контейнере, а не только в строке таблицы', () => {
+    const { document } = parseHTML(`
+      <div class="message-block">
+        <div class="message-head"><a href="?showtopic=1108618&view=findpost&p=777">#777</a> 02.09.26, 09:30</div>
+        <div class="postcolor" id="post-777">Текст сообщения без даты внутри</div>
+      </div>`);
+    const result = fourPdaAdapter.parse(
+      document as unknown as Document,
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13620',
+      { sourceId: '4pda:1108618', topicId: '1108618', imageMode: 'links', imageKeywords: [], manualSelection: null },
+    );
+    expect(result.posts).toHaveLength(1);
+    const date = new Date(result.posts[0]?.posted_at || '');
+    expect(Number.isFinite(date.getTime())).toBe(true);
+    expect([date.getFullYear(), date.getMonth() + 1, date.getDate()]).toEqual([2026, 9, 2]);
+  });
+
+  it('не берёт дату соседнего сообщения из общего списка', () => {
+    const { document } = parseHTML(`
+      <div class="topic-posts">
+        <div class="message-block">
+          <div class="message-head">#111 01.09.26, 10:00</div>
+          <div class="postcolor" id="post-111">Первое сообщение</div>
+        </div>
+        <div class="message-block">
+          <div class="message-head">#222 02.09.26, 11:00</div>
+          <div class="postcolor" id="post-222">Второе сообщение</div>
+        </div>
+      </div>`);
+    const result = fourPdaAdapter.parse(
+      document as unknown as Document,
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13620',
+      { sourceId: '4pda:1108618', topicId: '1108618', imageMode: 'links', imageKeywords: [], manualSelection: null },
+    );
+    const days = result.posts.map((post) => new Date(post.posted_at || '').getDate());
+    expect(days).toEqual([1, 2]);
+  });
+
+  it('сообщает в диагностике, сколько сообщений осталось без даты', () => {
+    const { document } = parseHTML(`
+      <div class="message-block"><div class="postcolor" id="post-555">Сообщение вообще без даты</div></div>`);
+    const result = fourPdaAdapter.parse(
+      document as unknown as Document,
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13620',
+      { sourceId: '4pda:1108618', topicId: '1108618', imageMode: 'links', imageKeywords: [], manualSelection: null },
+    );
+    expect(result.diagnostics.join(' ')).toContain('не найдена дата');
+  });
+});
+
+describe('выжимка без повторов и лишнего', () => {
+  const reportWithDuplicates: ReportRecord = {
+    ...importAiResponse(
+      readFileSync(fileURLToPath(new URL('./fixtures/ai-answer-2026-09.json', import.meta.url)), 'utf8'),
+      'source',
+      'topic',
+    ).report,
+    structured_facts: {
+      ...importAiResponse(
+        readFileSync(fileURLToPath(new URL('./fixtures/ai-answer-2026-09.json', import.meta.url)), 'utf8'),
+        'source',
+        'topic',
+      ).report.structured_facts,
+      important_news: [
+        {
+          title: 'Баг с Chrome при низком разрешении',
+          details: 'Описание из новостей',
+          status: 'confirmed',
+          source_post_urls: ['https://4pda.to/forum/index.php?showtopic=1108618&st=13300'],
+          external_urls: [],
+        },
+      ],
+      bugs_and_problems: [
+        {
+          title: 'Баг с Chrome при низком разрешении',
+          details: 'То же описание в багах',
+          status: 'confirmed',
+          source_post_urls: ['https://4pda.to/forum/index.php?showtopic=1108618&st=13540'],
+          external_urls: [],
+        },
+      ],
+    },
+  };
+
+  it('показывает одинаковый факт один раз и отмечает, где он ещё встречался', () => {
+    const { document } = parseHTML('<div id="reports"></div>');
+    const container = document.getElementById('reports') as unknown as HTMLElement;
+    renderSavedReports(container, [reportWithDuplicates]);
+    const text = container.textContent || '';
+    expect(text).toContain('Объединено повторов: 1');
+    expect(text).toContain('То же самое упоминалось в: Баги и проблемы');
+    expect(text.match(/Баг с Chrome при низком разрешении/g)?.length).toBe(1);
+    // источники обоих копий объединяются
+    const links = Array.from(container.querySelectorAll('a')).map((anchor) => anchor.getAttribute('href'));
+    expect(links).toContain('https://4pda.to/forum/index.php?showtopic=1108618&st=13300');
+    expect(links).toContain('https://4pda.to/forum/index.php?showtopic=1108618&st=13540');
+  });
+
+  it('промпт запрещает дублировать факт в нескольких разделах', () => {
+    const packet = createAiPacket([post('1', 'текст')]);
+    expect(packet.prompt_md).toContain('Один факт — только в одном разделе');
+    expect(packet.prompt_md).toContain('Цель отчёта — не количество пунктов');
+    expect(packet.prompt_md).not.toContain('не меньше 6 Q&A-карточек');
+  });
+
+  it('импорт помечает ответ как не дубликат до проверки базы', () => {
+    const result = importAiResponse('## Сводка\nТекст', 'source', 'topic');
+    expect(result.duplicate).toBe(false);
   });
 });

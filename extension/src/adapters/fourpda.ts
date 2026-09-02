@@ -1,5 +1,6 @@
 import type { ForumAdapter, ParseOptions, ParsedDocument } from './types';
 import { extractPost, findPostElements, pageTitle, queryFirst, type PostElementConfig } from './dom';
+import { normalizeWhitespace } from '../core/utils';
 import { findLastPageUrl, findPreviousPageUrl } from './pagination';
 
 const FOURPDA_POST_CONFIG: PostElementConfig = {
@@ -120,6 +121,14 @@ export class FourPdaAdapter implements ForumAdapter {
     }
     if (posts.length < elements.length) {
       diagnostics.push(`4PDA: из ${elements.length} блоков извлечено ${posts.length} сообщений.`);
+    }
+    const undatedPosts = posts.filter((post) => !post.posted_at);
+    if (undatedPosts.length > 0) {
+      // Без этой строки причина «Дата: не распознана» в файле для ИИ не видна.
+      const sample = normalizeWhitespace(elements[0]?.textContent || '').slice(0, 160);
+      diagnostics.push(
+        `4PDA: у ${undatedPosts.length} сообщений не найдена дата. Начало первого блока страницы: «${sample}».`,
+      );
     }
     return {
       title: pageTitle(document),

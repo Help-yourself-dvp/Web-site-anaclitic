@@ -312,10 +312,16 @@ async function clearAllData(): Promise<void> {
   });
 }
 
-async function collect(mode: 'checkpoint' | 'history' | 'new'): Promise<void> {
+async function collect(mode: 'checkpoint' | 'history' | 'new', fromOpenPage = false): Promise<void> {
   await withBusy(async () => {
     setStatus(mode === 'new' ? 'Идёт поиск checkpoint и новых страниц…' : 'Идёт разбор страницы…', 'neutral');
-    const response = await send({ type: 'collect', mode, url: activeUrl, maxPages: Number(pagesInput.value) });
+    const response = await send({
+      type: 'collect',
+      mode,
+      url: activeUrl,
+      maxPages: Number(pagesInput.value),
+      fromOpenPage,
+    });
     if (!response.ok) {
       setStatus(response.error, 'error');
       renderDiagnostics(response.details || []);
@@ -524,7 +530,10 @@ async function importResponse(): Promise<void> {
       });
       importResult.append(list);
     }
-    setStatus('Ответ ИИ сохранён локально.', result.valid_json ? 'success' : 'warning');
+    setStatus(
+      result.duplicate ? 'Такой ответ уже был сохранён — вторая копия не создавалась.' : 'Ответ ИИ сохранён локально.',
+      result.duplicate ? 'warning' : result.valid_json ? 'success' : 'warning',
+    );
     await refresh();
     const reportsPanel = savedReports.closest('details') as HTMLDetailsElement | null;
     if (reportsPanel) reportsPanel.open = true;
@@ -544,6 +553,12 @@ $('#resetButton').addEventListener('click', () => void resetCurrentSource());
 clearAllButton.addEventListener('click', () => void clearAllData());
 $('#checkpointButton').addEventListener('click', () => void collect('checkpoint'));
 $('#historyButton').addEventListener('click', () => void collect('history'));
+$('#historyFromHereButton').addEventListener('click', () => void collect('history', true));
+$('#collapseReportsButton').addEventListener('click', () => {
+  savedReports.querySelectorAll('details').forEach((details) => {
+    details.open = false;
+  });
+});
 $('#collectButton').addEventListener('click', () => void collect('new'));
 $('#packageButton').addEventListener('click', () => void createPackage('single'));
 splitPackageButton.addEventListener('click', () => void createPackage('split'));
