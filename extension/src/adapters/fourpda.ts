@@ -67,6 +67,26 @@ const FOURPDA_POST_CONFIG: PostElementConfig = {
   ],
 };
 
+/**
+ * 4PDA печатает первое сообщение темы (шапку с характеристиками) вверху КАЖДОЙ
+ * страницы. Из-за него период выгрузки всегда начинался с даты шапки
+ * (в логе пользователя: 2025-07-10 при реальных постах августа 2026), а сама
+ * шапка каждый раз попадала в «новые сообщения».
+ */
+function isRepeatedTopicHeader(element: Element, url: string): boolean {
+  let offset = 0;
+  try {
+    offset = Number.parseInt(new URL(url, 'https://4pda.to/').searchParams.get('st') || '0', 10) || 0;
+  } catch {
+    offset = 0;
+  }
+  // На первой странице это настоящее первое сообщение темы, его сохраняем.
+  if (offset <= 0) return false;
+  const table = element.closest('table[data-post]');
+  const number = normalizeWhitespace(queryFirst(table || element, ['a[href*="view=findpost"]'])?.textContent || '');
+  return number === '#1';
+}
+
 function isLikelyPost(element: Element): boolean {
   if (element.matches('div.postcolor[id^="post-"]')) return true;
   const hasBody = Boolean(queryFirst(element, FOURPDA_POST_CONFIG.bodySelectors));
@@ -99,7 +119,9 @@ export class FourPdaAdapter implements ForumAdapter {
 
   parse(document: Document, url: string, options: ParseOptions): ParsedDocument {
     const candidates = findPostElements(document, FOURPDA_POST_CONFIG.postSelectors);
-    const elements = candidates.filter(isLikelyPost);
+    const likelyPosts = candidates.filter(isLikelyPost);
+    const repeatedHeaders = likelyPosts.filter((element) => isRepeatedTopicHeader(element, url));
+    const elements = likelyPosts.filter((element) => !isRepeatedTopicHeader(element, url));
     const posts = elements
       .map((element) => {
         const mainCell = element.closest('td[id^="post-main-"], td[id*="post-main-"]');
@@ -114,10 +136,14 @@ export class FourPdaAdapter implements ForumAdapter {
     if (elements.length === 0) {
       diagnostics.push('Разметка 4PDA не распознана: блоки постов не найдены.');
     }
-    if (candidates.length > elements.length) {
+    if (candidates.length > likelyPosts.length) {
+      // Это не сбой: так отсеиваются меню, кнопки и всплывающие окна страницы.
       diagnostics.push(
-        `4PDA: отброшено ${candidates.length - elements.length} блоков без признаков сообщения (меню/служебная разметка).`,
+        `4PDA: пропущено ${candidates.length - likelyPosts.length} служебных блоков (меню и кнопки) — так и должно быть.`,
       );
+    }
+    if (repeatedHeaders.length > 0) {
+      diagnostics.push('4PDA: пропущена шапка темы (первое сообщение повторяется на каждой странице).');
     }
     if (posts.length < elements.length) {
       diagnostics.push(`4PDA: из ${elements.length} блоков извлечено ${posts.length} сообщений.`);

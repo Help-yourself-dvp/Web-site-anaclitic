@@ -790,3 +790,85 @@ describe('дата поста в реальной разметке 4PDA из д�
     expect(second).toContain('12.08.26, 23:15');
   });
 });
+
+describe('шапка темы не считается новым сообщением (разметка из лога пользователя)', () => {
+  const options = {
+    sourceId: '4pda:1108618',
+    topicId: '1108618',
+    imageMode: 'links' as const,
+    imageKeywords: [] as string[],
+    manualSelection: null,
+  };
+  // Точная разметка 4PDA из fkb-diagnostic.md: строка шапки ph-<id>-d1/d2
+  // (автор + «Сообщение #N» + штамп) и строка тела pb-<id>-r2.
+  const postTable = (id: string, number: string, posted: string, author: string, body: string): string =>
+    `<table class="ipbtable" cellspacing="1" data-post="${id}"><tbody>` +
+    `<tr><td valign="middle" class="row2" id="ph-${id}-d1"><a name="entry${id}"></a>` +
+    `<div id="post-member-${id}" class="popmenubutton-new-out"><span class="normalname">` +
+    `<a href="https://4pda.to/forum/index.php?showuser=1">${author}</a></span></div></td>` +
+    `<td id="ph-${id}-d2" class="row2" valign="middle" width="99%"><div style="float:right">Сообщение ` +
+    `<a title="Ссылка на это сообщение" href="https://4pda.to/forum/index.php?showtopic=1108618&amp;view=findpost&amp;p=${id}">${number}</a>` +
+    `</div> ${posted}</td></tr>` +
+    `<tr id="pb-${id}-r2"><td valign="top" class="post2"><span class="postdetails">` +
+    `<div class="mem-title">Гуру</div>Группа: Постоянный Сообщений: 8214 Регистрация: 16.05.15</span></td>` +
+    `<td valign="top" class="post2"><div class="postcolor " id="post-${id}">${body}</div></td></tr>` +
+    `</tbody></table>`;
+  const header = postTable(
+    '138036191',
+    '#1',
+    '10.07.25, 11:09',
+    'Verue',
+    'Обсуждение Honor Magic 8/8 Pro, характеристики в спойлере',
+  );
+  const reply = postTable(
+    '144641377',
+    '#13262',
+    '12.08.26, 22:19',
+    'Sheiest',
+    'А раньше шестой показывал? У меня на глобалку шестой',
+  );
+  const parse = (pageUrl: string) => {
+    const { document } = parseHTML(`<html><body>${header}${reply}</body></html>`);
+    return fourPdaAdapter.parse(document as unknown as Document, pageUrl, options);
+  };
+
+  it('на странице 664 шапка темы пропускается, а обычный пост остаётся', () => {
+    const result = parse('https://4pda.to/forum/index.php?showtopic=1108618&st=13260');
+    expect(result.posts.map((item) => item.post_id)).toEqual(['144641377']);
+    expect(result.diagnostics.join(' ')).toContain('пропущена шапка темы');
+  });
+
+  it('на первой странице первое сообщение сохраняется', () => {
+    const result = parse('https://4pda.to/forum/index.php?showtopic=1108618');
+    expect(result.posts.map((item) => item.post_id)).toEqual(['138036191', '144641377']);
+  });
+
+  it('период страницы без шапки начинается с реального поста', () => {
+    const result = parse('https://4pda.to/forum/index.php?showtopic=1108618&st=13260');
+    const dates = result.posts.map((item) => new Date(item.posted_at || '').getFullYear());
+    expect(dates).toEqual([2026]);
+    expect(dates).not.toContain(2025);
+  });
+
+  it('дата берётся из строки шапки поста, а не из «Регистрация»', () => {
+    const result = parse('https://4pda.to/forum/index.php?showtopic=1108618&st=13260');
+    const value = new Date(result.posts[0]?.posted_at || '');
+    expect([value.getFullYear(), value.getMonth() + 1, value.getDate(), value.getHours(), value.getMinutes()]).toEqual([
+      2026, 8, 12, 22, 19,
+    ]);
+  });
+
+  it('строка про служебные блоки не звучит как сбой', () => {
+    const { document } = parseHTML(
+      '<html><body><div class="post"><div class="postcolor">меню</div></div></body></html>',
+    );
+    const result = fourPdaAdapter.parse(
+      document as unknown as Document,
+      'https://4pda.to/forum/index.php?showtopic=1',
+      options,
+    );
+    const text = result.diagnostics.join(' ');
+    expect(text).not.toContain('ошибка');
+    expect(text).not.toContain('отброшено');
+  });
+});

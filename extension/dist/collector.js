@@ -571,6 +571,18 @@
       ".post_body"
     ]
   };
+  function isRepeatedTopicHeader(element, url) {
+    let offset = 0;
+    try {
+      offset = Number.parseInt(new URL(url, "https://4pda.to/").searchParams.get("st") || "0", 10) || 0;
+    } catch {
+      offset = 0;
+    }
+    if (offset <= 0) return false;
+    const table = element.closest("table[data-post]");
+    const number = normalizeWhitespace(queryFirst(table || element, ['a[href*="view=findpost"]'])?.textContent || "");
+    return number === "#1";
+  }
   function isLikelyPost(element) {
     if (element.matches('div.postcolor[id^="post-"]')) return true;
     const hasBody = Boolean(queryFirst(element, FOURPDA_POST_CONFIG.bodySelectors));
@@ -600,7 +612,9 @@
     }
     parse(document2, url, options) {
       const candidates = findPostElements(document2, FOURPDA_POST_CONFIG.postSelectors);
-      const elements = candidates.filter(isLikelyPost);
+      const likelyPosts = candidates.filter(isLikelyPost);
+      const repeatedHeaders = likelyPosts.filter((element) => isRepeatedTopicHeader(element, url));
+      const elements = likelyPosts.filter((element) => !isRepeatedTopicHeader(element, url));
       const posts = elements.map((element) => {
         const mainCell = element.closest('td[id^="post-main-"], td[id*="post-main-"]');
         const metadataRoot = mainCell?.parentElement || element.closest("tr") || element;
@@ -613,10 +627,13 @@
       if (elements.length === 0) {
         diagnostics.push("\u0420\u0430\u0437\u043C\u0435\u0442\u043A\u0430 4PDA \u043D\u0435 \u0440\u0430\u0441\u043F\u043E\u0437\u043D\u0430\u043D\u0430: \u0431\u043B\u043E\u043A\u0438 \u043F\u043E\u0441\u0442\u043E\u0432 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D\u044B.");
       }
-      if (candidates.length > elements.length) {
+      if (candidates.length > likelyPosts.length) {
         diagnostics.push(
-          `4PDA: \u043E\u0442\u0431\u0440\u043E\u0448\u0435\u043D\u043E ${candidates.length - elements.length} \u0431\u043B\u043E\u043A\u043E\u0432 \u0431\u0435\u0437 \u043F\u0440\u0438\u0437\u043D\u0430\u043A\u043E\u0432 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F (\u043C\u0435\u043D\u044E/\u0441\u043B\u0443\u0436\u0435\u0431\u043D\u0430\u044F \u0440\u0430\u0437\u043C\u0435\u0442\u043A\u0430).`
+          `4PDA: \u043F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u043E ${candidates.length - likelyPosts.length} \u0441\u043B\u0443\u0436\u0435\u0431\u043D\u044B\u0445 \u0431\u043B\u043E\u043A\u043E\u0432 (\u043C\u0435\u043D\u044E \u0438 \u043A\u043D\u043E\u043F\u043A\u0438) \u2014 \u0442\u0430\u043A \u0438 \u0434\u043E\u043B\u0436\u043D\u043E \u0431\u044B\u0442\u044C.`
         );
+      }
+      if (repeatedHeaders.length > 0) {
+        diagnostics.push("4PDA: \u043F\u0440\u043E\u043F\u0443\u0449\u0435\u043D\u0430 \u0448\u0430\u043F\u043A\u0430 \u0442\u0435\u043C\u044B (\u043F\u0435\u0440\u0432\u043E\u0435 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u0435\u0442\u0441\u044F \u043D\u0430 \u043A\u0430\u0436\u0434\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435).");
       }
       if (posts.length < elements.length) {
         diagnostics.push(`4PDA: \u0438\u0437 ${elements.length} \u0431\u043B\u043E\u043A\u043E\u0432 \u0438\u0437\u0432\u043B\u0435\u0447\u0435\u043D\u043E ${posts.length} \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439.`);
