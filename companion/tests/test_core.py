@@ -83,6 +83,52 @@ class CompanionCoreTests(unittest.TestCase):
         self.assertEqual(self.db.list_reports(self.source["source_id"], 10), [])
         self.assertEqual(self.db.list_sources(), [])
 
+    def test_conflict_objects_markdown_urls_and_inline_summary_are_accepted(self) -> None:
+        """Форма ответа, которую реально вернул онлайн-ИИ 2026-09-02."""
+        payload = {
+            "schema_version": "1.0",
+            "report": {
+                "title": "Отчёт", "period": {"from": None, "to": "2026-08-31T16:07:00.000Z"},
+                "overview": "Коротко",
+                "important_news": [{
+                    "title": "Новость", "details": "Что произошло", "status": "confirmed",
+                    "source_post_urls": [
+                        "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13260](https://4pda.to/forum/index.php?showtopic=1108618&st=13260)"
+                    ],
+                    "external_urls": [],
+                }],
+                "confirmed_decisions": [], "bugs_and_problems": [], "rumors": [],
+                "links": [], "things_to_check": ["Проверить обновление"],
+                "qa": [{
+                    "question": "Как отключить быструю зарядку?", "short_answer": "Нажмите «Остановить».",
+                    "detailed_answer": "Подробно.", "status": "Не подтверждено.", "tags": ["зарядка"],
+                    "device_topic": "Honor Magic 8 Pro",
+                    "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13260"],
+                    "external_urls": [], "first_seen_at": None, "updated_at": None,
+                    "confidence_note": "Один источник.",
+                }],
+                "conflicts": [{
+                    "title": "Был ли отозван патч 193?",
+                    "description": "Один пишет, что отозвали, другие получили.",
+                    "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13380"],
+                }],
+            },
+            "markdown_summary": "## Сводка\n\n### Q&amp;A\n- **Вопрос** — ответ.",
+        }
+        imported = import_ai_response(json.dumps(payload, ensure_ascii=False), "source", "topic")
+        self.assertTrue(imported.valid_json)
+        self.assertTrue(imported.repaired_json)
+        facts = imported.report["structured_facts"]
+        self.assertEqual(len(facts["conflicts"]), 1)
+        self.assertIn("Был ли отозван патч 193?", facts["conflicts"][0])
+        self.assertEqual(
+            facts["important_news"][0]["source_post_urls"],
+            ["https://4pda.to/forum/index.php?showtopic=1108618&st=13260"],
+        )
+        self.assertEqual(facts["qa"][0]["status"], "unconfirmed")
+        self.assertIn("## Сводка", imported.report["parsed_summary"])
+        self.assertNotIn("schema_version", imported.report["parsed_summary"])
+
     def test_null_and_string_values_are_repaired_in_sections(self) -> None:
         incomplete = {
             "schema_version": "1.0", "report": {

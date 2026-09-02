@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0",
+  "report": {
+    "title": "Анализ новых сообщений форума Honor Magic 8/8 Pro (пакет 2026-03-08 — 2026-08-31)",
+    "period": {
+      "from": "2026-03-08T07:55:00.000Z",
+      "to": "2026-08-31T16:07:00.000Z"
+    },
+    "overview": "В пакете сообщений основное внимание уделено выходу прошивок 10.0.0.193 и 10.0.0.199.",
+    "important_news": [
+      {
+        "title": "Выход прошивки 10.0.0.193 для глобальных версий (C636, C185) с улучшением Wi-Fi 7",
+        "details": "Обновление приносит стабильную работу Wi-Fi 7.",
+        "status": "confirmed",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13260](https://4pda.to/forum/index.php?showtopic=1108618&st=13260)",
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13280](https://4pda.to/forum/index.php?showtopic=1108618&st=13280)"
+        ],
+        "external_urls": []
+      }
+    ],
+    "confirmed_decisions": [
+      {
+        "title": "Для изоляции приложений от VPN используйте Shelter",
+        "details": "Shelter позволяет создать рабочее пространство.",
+        "status": "confirmed",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13280](https://4pda.to/forum/index.php?showtopic=1108618&st=13280)"
+        ],
+        "external_urls": []
+      }
+    ],
+    "bugs_and_problems": [
+      {
+        "title": "Проблема с присвоением мелодий на звонок (после 193)",
+        "details": "Мелодия присваивается, но при входящем звонке играет стандартная.",
+        "status": "confirmed",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13360](https://4pda.to/forum/index.php?showtopic=1108618&st=13360)"
+        ],
+        "external_urls": []
+      }
+    ],
+    "rumors": [
+      {
+        "title": "Отзыв обновления 193 из-за багов",
+        "details": "Один пользователь предположил, что обновление отозвали.",
+        "status": "conflicting",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13380](https://4pda.to/forum/index.php?showtopic=1108618&st=13380)"
+        ],
+        "external_urls": []
+      }
+    ],
+    "links": [
+      {
+        "url": "[https://f-droid.org/packages/net.typeblog.shelter/](https://f-droid.org/packages/net.typeblog.shelter/)",
+        "annotation": "Страница приложения Shelter.",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13280](https://4pda.to/forum/index.php?showtopic=1108618&st=13280)"
+        ]
+      }
+    ],
+    "things_to_check": ["Как отключить уведомление о записи разговора на глобальной версии?"],
+    "qa": [
+      {
+        "question": "Как отключить быструю зарядку (100 Вт) на время?",
+        "short_answer": "Нажмите «Остановить» в уведомлении.",
+        "detailed_answer": "Если не успели, уведомление можно найти в шторке.",
+        "status": "confirmed",
+        "tags": ["зарядка", "батарея"],
+        "device_topic": "Honor Magic 8 Pro",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13260](https://4pda.to/forum/index.php?showtopic=1108618&st=13260)"
+        ],
+        "external_urls": [],
+        "first_seen_at": null,
+        "updated_at": null,
+        "confidence_note": "Подтверждено несколькими пользователями."
+      }
+    ],
+    "conflicts": [
+      {
+        "title": "Был ли отозван патч 193?",
+        "description": "Один пользователь предположил, что обновление 193 отозвали, другие подтвердили получение.",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13380](https://4pda.to/forum/index.php?showtopic=1108618&st=13380)"
+        ]
+      },
+      {
+        "title": "Доступность Gemini в России",
+        "description": "Одни утверждают, что Gemini заблокирован, другие сообщают, что работает через VPN.",
+        "source_post_urls": [
+          "[https://4pda.to/forum/index.php?showtopic=1108618&amp;st=13320](https://4pda.to/forum/index.php?showtopic=1108618&st=13320)"
+        ]
+      }
+    ]
+  },
+  "markdown_summary": "## Сводка по новым сообщениям\n\n### 📌 Важные новости\n- **Выход прошивки 10.0.0.193** – улучшена работа Wi-Fi 7.\n\n### 📋 Q&amp;A-карточки\n- **Как отключить быструю зарядку?** Нажмите «Остановить».\n"
+}

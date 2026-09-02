@@ -247,6 +247,266 @@ function extractHumanSummary(raw: string, jsonText: string | null): string {
   return '';
 }
 
+/* -------------------------------------------------------------------------- *
+ * Приведение реального ответа онлайн-ИИ к схеме 1.0.
+ *
+ * Модели почти всегда возвращают «почти правильный» JSON:
+ *  - report.conflicts как массив объектов вместо массива строк;
+ *  - ссылки в Markdown-обёртке «[url](url)» и с HTML-экранированием «&amp;»;
+ *  - статусы словами («не подтверждено») вместо значений схемы;
+ *  - лишние поля, которых нет в схеме.
+ * Раньше любой такой вариант отклонялся целиком, пользователь видел
+ * «JSON не прошёл строгую проверку» и терял структурированный отчёт и Q&A.
+ * Здесь эти отличия исправляются безопасно: факты не выдумываются,
+ * исходный ответ целиком остаётся в raw_ai_response.
+ * -------------------------------------------------------------------------- */
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+export function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, code: string) => {
+    const key = code.toLowerCase();
+    if (HTML_ENTITIES[key]) return HTML_ENTITIES[key];
+    if (!key.startsWith('#')) return match;
+    const point = key.startsWith('#x') ? Number.parseInt(key.slice(2), 16) : Number.parseInt(key.slice(1), 10);
+    if (!Number.isFinite(point) || point < 32 || point > 0x10ffff) return match;
+    try {
+      return String.fromCodePoint(point);
+    } catch {
+      return match;
+    }
+  });
+}
+
+const MARKDOWN_LINK = /^\[([^\]]*)\]\(\s*<?([^)\s>]+)>?[^)]*\)$/s;
+
+export function cleanUrlValue(value: string): string {
+  let url = decodeHtmlEntities(value).trim();
+  const link = MARKDOWN_LINK.exec(url);
+  if (link) url = (link[2] || link[1] || '').trim();
+  url = decodeHtmlEntities(url)
+    .replace(/^<(.*)>$/s, '$1')
+    .trim();
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
+    const inline = /(https?:\/\/[^\s"'<>()[\],]+)/i.exec(url);
+    if (inline?.[1]) url = inline[1];
+  }
+  return url.replace(/[,.;:]+$/, '');
+}
+
+interface NormalizeStats {
+  urls: number;
+  statuses: number;
+  conflicts: number;
+  dropped: string[];
+}
+
+function normalizeUrlList(value: unknown, stats: NormalizeStats): string[] {
+  if (value === undefined || value === null) return [];
+  const items = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
+  const urls: string[] = [];
+  for (const item of items) {
+    if (typeof item !== 'string') continue;
+    const cleaned = cleanUrlValue(item);
+    if (!cleaned) continue;
+    if (cleaned !== item.trim()) stats.urls += 1;
+    if (!urls.includes(cleaned)) urls.push(cleaned);
+  }
+  return urls;
+}
+
+const STATUS_ALIASES: Record<string, QaStatus> = {
+  confirmed: 'confirmed',
+  verified: 'confirmed',
+  решено: 'confirmed',
+  подтверждено: 'confirmed',
+  подтвержден: 'confirmed',
+  подтверждена: 'confirmed',
+  'подтверждено пользователями': 'confirmed',
+  probable: 'probable',
+  likely: 'probable',
+  вероятно: 'probable',
+  возможно: 'probable',
+  'частично подтверждено': 'probable',
+  unconfirmed: 'unconfirmed',
+  unverified: 'unconfirmed',
+  unknown: 'unconfirmed',
+  'не подтверждено': 'unconfirmed',
+  неподтверждено: 'unconfirmed',
+  'без подтверждения': 'unconfirmed',
+  outdated: 'outdated',
+  stale: 'outdated',
+  устарело: 'outdated',
+  устаревшее: 'outdated',
+  'не актуально': 'outdated',
+  conflicting: 'conflicting',
+  disputed: 'conflicting',
+  противоречиво: 'conflicting',
+  противоречие: 'conflicting',
+  противоречия: 'conflicting',
+};
+
+function normalizeStatus(value: unknown, stats: NormalizeStats): unknown {
+  if (typeof value !== 'string') return value;
+  const raw = value.trim();
+  const key = raw
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[.!?]+$/, '');
+  const mapped = STATUS_ALIASES[key];
+  if (mapped && mapped !== raw) {
+    stats.statuses += 1;
+    return mapped;
+  }
+  return raw;
+}
+
+const ROOT_FIELDS = ['schema_version', 'report', 'markdown_summary'] as const;
+const SUMMARY_ALIASES = ['summary', 'markdown', 'human_summary', 'readable_summary'];
+const REPORT_FIELDS = [
+  'title',
+  'period',
+  'overview',
+  'important_news',
+  'confirmed_decisions',
+  'bugs_and_problems',
+  'rumors',
+  'links',
+  'things_to_check',
+  'qa',
+  'conflicts',
+] as const;
+const SECTION_FIELDS = ['title', 'details', 'status', 'source_post_urls', 'external_urls'] as const;
+const LINK_FIELDS = ['url', 'annotation', 'source_post_urls'] as const;
+const QA_FIELDS = [
+  'question',
+  'short_answer',
+  'detailed_answer',
+  'status',
+  'tags',
+  'device_topic',
+  'source_post_urls',
+  'external_urls',
+  'first_seen_at',
+  'updated_at',
+  'confidence_note',
+] as const;
+
+function pickKnown(source: RecordValue, allowed: readonly string[], path: string, stats: NormalizeStats): RecordValue {
+  const result: RecordValue = {};
+  for (const [key, value] of Object.entries(source)) {
+    if ((allowed as readonly string[]).includes(key)) result[key] = value;
+    else if (stats.dropped.length < 12) stats.dropped.push(`${path}.${key}`);
+  }
+  return result;
+}
+
+function conflictText(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (!isRecord(value)) return '';
+  const text = (...fields: string[]): string => {
+    for (const field of fields) {
+      const item = value[field];
+      if (typeof item === 'string' && item.trim()) return item.trim();
+    }
+    return '';
+  };
+  const title = text('title', 'name', 'topic', 'question');
+  const details = text('description', 'details', 'text', 'note', 'comment');
+  const urls = normalizeUrlList(value.source_post_urls ?? value.urls ?? value.source_urls, {
+    urls: 0,
+    statuses: 0,
+    conflicts: 0,
+    dropped: [],
+  });
+  const body = [title, details].filter(Boolean).join(' — ');
+  if (!body) return '';
+  return urls.length ? `${body} (источники: ${urls.join(', ')})` : body;
+}
+
+export function normalizeAiAnswer(input: unknown): { value: unknown; notes: string[] } {
+  if (!isRecord(input)) return { value: input, notes: [] };
+  const stats: NormalizeStats = { urls: 0, statuses: 0, conflicts: 0, dropped: [] };
+  const notes: string[] = [];
+  const root: RecordValue = {};
+  for (const field of ROOT_FIELDS) if (input[field] !== undefined) root[field] = input[field];
+  if (typeof root.markdown_summary !== 'string') {
+    const alias = SUMMARY_ALIASES.find((key) => typeof input[key] === 'string');
+    if (alias) {
+      root.markdown_summary = input[alias];
+      notes.push(`markdown_summary взят из поля ${alias}.`);
+    }
+  }
+  if (typeof root.markdown_summary === 'string') root.markdown_summary = decodeHtmlEntities(root.markdown_summary);
+  for (const key of Object.keys(input)) {
+    if (!(ROOT_FIELDS as readonly string[]).includes(key) && !SUMMARY_ALIASES.includes(key)) {
+      if (stats.dropped.length < 12) stats.dropped.push(`root.${key}`);
+    }
+  }
+
+  if (isRecord(root.report)) {
+    const report = pickKnown(root.report, REPORT_FIELDS, 'report', stats);
+    if (isRecord(report.period)) report.period = pickKnown(report.period, ['from', 'to'], 'report.period', stats);
+    for (const section of SECTION_NAMES) {
+      if (!Array.isArray(report[section])) continue;
+      report[section] = (report[section] as unknown[]).map((item) => {
+        if (!isRecord(item)) return item;
+        const fixed = pickKnown(item, SECTION_FIELDS, `report.${section}[]`, stats);
+        if ('status' in fixed) fixed.status = normalizeStatus(fixed.status, stats);
+        fixed.source_post_urls = normalizeUrlList(fixed.source_post_urls, stats);
+        fixed.external_urls = normalizeUrlList(fixed.external_urls, stats);
+        return fixed;
+      });
+    }
+    if (Array.isArray(report.links)) {
+      report.links = (report.links as unknown[]).map((item) => {
+        if (!isRecord(item)) return item;
+        const fixed = pickKnown(item, LINK_FIELDS, 'report.links[]', stats);
+        if (typeof fixed.url === 'string') {
+          const cleaned = cleanUrlValue(fixed.url);
+          if (cleaned !== fixed.url.trim()) stats.urls += 1;
+          fixed.url = cleaned;
+        }
+        fixed.source_post_urls = normalizeUrlList(fixed.source_post_urls, stats);
+        return fixed;
+      });
+    }
+    if (Array.isArray(report.qa)) {
+      report.qa = (report.qa as unknown[]).map((item) => {
+        if (!isRecord(item)) return item;
+        const fixed = pickKnown(item, QA_FIELDS, 'report.qa[]', stats);
+        if ('status' in fixed) fixed.status = normalizeStatus(fixed.status, stats);
+        fixed.source_post_urls = normalizeUrlList(fixed.source_post_urls, stats);
+        fixed.external_urls = normalizeUrlList(fixed.external_urls, stats);
+        return fixed;
+      });
+    }
+    if (report.things_to_check !== undefined && !Array.isArray(report.things_to_check)) {
+      if (typeof report.things_to_check === 'string') report.things_to_check = [report.things_to_check];
+    }
+    if (report.conflicts !== undefined) {
+      const list = Array.isArray(report.conflicts) ? report.conflicts : [report.conflicts];
+      stats.conflicts += list.filter((item) => isRecord(item)).length;
+      report.conflicts = list.map(conflictText).filter((item) => item.length > 0);
+    }
+    root.report = report;
+  }
+
+  if (stats.conflicts > 0) notes.push(`report.conflicts: ${stats.conflicts} объект(а) заменены на строки.`);
+  if (stats.urls > 0) notes.push(`Ссылки очищены от Markdown-обёртки и HTML-экранирования: ${stats.urls} шт.`);
+  if (stats.statuses > 0) notes.push(`Статусы приведены к значениям схемы: ${stats.statuses} шт.`);
+  if (stats.dropped.length > 0)
+    notes.push(`Поля вне схемы убраны (исходный ответ сохранён): ${stats.dropped.join(', ')}.`);
+  return { value: root, notes };
+}
+
 function repairMissingFields(input: unknown, humanSummary: string): { value: unknown; warnings: string[] } {
   if (!isRecord(input)) return { value: input, warnings: [] };
   const root: RecordValue = { ...input };
@@ -498,28 +758,39 @@ export function importAiResponse(raw: string, sourceId: string, topicId: string)
   let payload: AiResponsePayload | null = null;
   let validJson = false;
   const jsonText = findJsonObject(text);
-  const humanSummary = extractHumanSummary(text, jsonText);
+  // Человекочитаемая часть: либо блок после ---MARKDOWN---, либо поле markdown_summary внутри JSON.
+  let humanSummary = decodeHtmlEntities(extractHumanSummary(text, jsonText));
   let repairedJson = false;
   if (jsonText) {
     try {
       const parsed: unknown = JSON.parse(jsonText);
-      const validation = validateAiResponse(parsed);
-      if (!validation.valid) {
-        const repaired = repairMissingFields(parsed, humanSummary);
+      const normalized = normalizeAiAnswer(parsed);
+      if (isRecord(normalized.value) && typeof normalized.value.markdown_summary === 'string') {
+        const jsonSummary = normalized.value.markdown_summary.trim();
+        if (jsonSummary) humanSummary = humanSummary || jsonSummary;
+      }
+      const validation = validateAiResponse(normalized.value);
+      if (validation.valid && validation.value) {
+        payload = validation.value;
+        validJson = true;
+        if (normalized.notes.length > 0) {
+          repairedJson = true;
+          warnings.push('Формат ответа ИИ автоматически приведён к схеме 1.0.');
+          warnings.push(...normalized.notes.slice(0, 10));
+        }
+      } else {
+        const repaired = repairMissingFields(normalized.value, humanSummary);
         const repairedValidation = validateAiResponse(repaired.value);
         if (repairedValidation.valid && repairedValidation.value) {
           payload = repairedValidation.value;
           validJson = true;
-          repairedJson = repaired.warnings.length > 0;
-          warnings.push('JSON принят после безопасного добавления отсутствующих необязательных полей.');
-          warnings.push(...repaired.warnings.slice(0, 10));
+          repairedJson = true;
+          warnings.push('JSON принят после автоматического приведения полей к схеме 1.0.');
+          warnings.push(...normalized.notes.slice(0, 5), ...repaired.warnings.slice(0, 5));
         } else {
-          warnings.push('JSON найден, но не прошёл строгую проверку. Сохранена обычная Markdown-сводка.');
-          warnings.push(...validation.errors.slice(0, 10));
+          warnings.push('JSON найден, но не прошёл проверку даже после автоисправления. Сохранена Markdown-сводка.');
+          warnings.push(...repairedValidation.errors.slice(0, 10));
         }
-      } else if (validation.value) {
-        payload = validation.value;
-        validJson = true;
       }
     } catch (error) {
       warnings.push(`JSON найден, но повреждён: ${error instanceof Error ? error.message : String(error)}`);
@@ -529,7 +800,7 @@ export function importAiResponse(raw: string, sourceId: string, topicId: string)
   }
 
   const markdown = markdownQa(humanSummary || text);
-  const summaryForStorage = humanSummary || '';
+  const summaryForStorage = humanSummary;
   if (!payload) payload = fallbackPayload(summaryForStorage || text, markdown.entries);
   if (payload.report.qa.length === 0 && markdown.entries.length > 0) {
     payload.report.qa = markdown.entries;

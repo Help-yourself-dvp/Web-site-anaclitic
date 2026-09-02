@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
 import { fourPdaAdapter } from '../src/adapters';
@@ -9,7 +11,7 @@ import {
   replyContextPosts,
   unknownPosts,
 } from '../src/core/collection';
-import { importAiResponse, validateAiResponse } from '../src/core/importer';
+import { cleanUrlValue, importAiResponse, validateAiResponse } from '../src/core/importer';
 import { createAiPacket, createAiPacketBundle, createSingleAiPacket } from '../src/core/prompt';
 import type { ForumPost } from '../src/core/types';
 import { postKey } from '../src/core/utils';
@@ -291,5 +293,81 @@ describe('импорт ответа AI', () => {
   it('сообщает о нераспознанной карточке', () => {
     const result = importAiResponse('## Q&A\n### Неясный вопрос\nТекста ответа нет.', 'source', 'topic');
     expect(result.unrecognized_qa.length).toBeGreaterThan(0);
+  });
+});
+
+describe('импорт ответа ИИ в том виде, в котором его реально возвращают модели', () => {
+  // Усечённая копия ответа пользователя от 2026-09-02: списки короче,
+  // но форма полей ровно та же (conflicts-объекты, ссылки в Markdown, сводка внутри JSON).
+  const realAnswer = readFileSync(fileURLToPath(new URL('./fixtures/ai-answer-2026-09.json', import.meta.url)), 'utf8');
+
+  it('принимает conflicts-объекты, ссылки в Markdown-обёртке и сводку внутри JSON', () => {
+    const result = importAiResponse(realAnswer, '4pda:1108618', '1108618');
+    expect(result.valid_json).toBe(true);
+    expect(result.repaired_json).toBe(true);
+    expect(result.report.structured_facts.conflicts).toHaveLength(2);
+    expect(result.report.structured_facts.conflicts[0]).toContain('Был ли отозван патч 193?');
+    expect(result.report.structured_facts.important_news[0]?.source_post_urls).toEqual([
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13260',
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13280',
+    ]);
+    expect(result.report.structured_facts.links[0]?.url).toBe('https://f-droid.org/packages/net.typeblog.shelter/');
+    expect(result.report.qa_entries).toHaveLength(1);
+    expect(result.report.qa_entries[0]?.status).toBe('confirmed');
+    // Читаемая сводка берётся из markdown_summary, а не из сырого JSON.
+    expect(result.report.parsed_summary).toContain('## Сводка по новым сообщениям');
+    // В исходном ответе было «Q&amp;A» — экранирование должно быть снято.
+    expect(result.report.parsed_summary).toContain('Q&A-карточки');
+    expect(result.report.parsed_summary).not.toContain('schema_version');
+  });
+
+  it('очищает URL от Markdown-обёртки, угловых скобок, HTML-экранирования и текста вокруг', () => {
+    expect(cleanUrlValue('[https://4pda.to/forum/index.php?showtopic=1&amp;st=2](https://4pda.to/x)')).toBe(
+      'https://4pda.to/x',
+    );
+    expect(cleanUrlValue('<https://4pda.to/y>')).toBe('https://4pda.to/y');
+    expect(cleanUrlValue('Смотрите https://4pda.to/z.')).toBe('https://4pda.to/z');
+    expect(cleanUrlValue('https://4pda.to/forum/index.php?showtopic=1&amp;st=20')).toBe(
+      'https://4pda.to/forum/index.php?showtopic=1&st=20',
+    );
+    expect(cleanUrlValue('https://4pda.to/plain')).toBe('https://4pda.to/plain');
+  });
+
+  it('приводит статусы словами к значениям схемы', () => {
+    const payload = JSON.parse(realAnswer) as { report: { qa: Array<{ status: string }> } };
+    payload.report.qa[0]!.status = 'Не подтверждено.';
+    const result = importAiResponse(JSON.stringify(payload), 'source', 'topic');
+    expect(result.valid_json).toBe(true);
+    expect(result.report.qa_entries[0]?.status).toBe('unconfirmed');
+  });
+
+  it('лишние поля вне схемы не ломают структурированный импорт', () => {
+    const payload = JSON.parse(realAnswer) as Record<string, unknown>;
+    payload.generated_by = 'some-model';
+    (payload.report as Record<string, unknown>).risk_level = 'low';
+    const result = importAiResponse(JSON.stringify(payload), 'source', 'topic');
+    expect(result.valid_json).toBe(true);
+    expect(result.report.structured_facts.qa).toHaveLength(1);
+    expect(result.warnings.join(' ')).toContain('Поля вне схемы');
+  });
+
+  it('даже при отказе JSON сохраняет читаемую сводку из markdown_summary, а не сырой JSON', () => {
+    const payload = JSON.parse(realAnswer) as Record<string, unknown>;
+    payload.schema_version = '2.0';
+    payload.report = 'сломано';
+    const result = importAiResponse(JSON.stringify(payload), 'source', 'topic');
+    expect(result.valid_json).toBe(false);
+    expect(result.report.parsed_summary).toContain('## Сводка по новым сообщениям');
+    expect(result.report.parsed_summary).not.toContain('"schema_version"');
+  });
+
+  it('промпт содержит заполненный шаблон ответа и запрет частых ошибок формата', () => {
+    const packet = createAiPacket([post('1', 'текст')]);
+    expect(packet.prompt_md).toContain('Шаблон ответа');
+    expect(packet.prompt_md).toContain('массив СТРОК');
+    expect(packet.prompt_md).toContain('"conflicts": [');
+    expect(packet.prompt_md).toContain('без HTML-экранирования');
+    expect(packet.prompt_md).toContain('markdown_summary');
+    expect(packet.prompt_md).toContain('---MARKDOWN---');
   });
 });

@@ -1223,6 +1223,35 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
   },
   "markdown_summary": "\u043F\u043E\u043B\u043D\u0430\u044F \u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F \u0441\u0432\u043E\u0434\u043A\u0430 \u0434\u043B\u044F \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430: \u0432\u0430\u0436\u043D\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0441\u043B\u0443\u0445\u0438, \u0441\u0441\u044B\u043B\u043A\u0438, \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0438 Q&A"
 }`;
+    const responseTemplate = `{
+  "schema_version": "1.0",
+  "report": {
+    "title": "\u0410\u043D\u0430\u043B\u0438\u0437 \u043D\u043E\u0432\u044B\u0445 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0439 (\u043F\u0430\u043A\u0435\u0442 2026-08-01 \u2014 2026-08-31)",
+    "period": {"from": "2026-08-01T00:00:00.000Z", "to": "2026-08-31T23:59:00.000Z"},
+    "overview": "3-6 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u0439: \u0447\u0442\u043E \u0440\u0435\u0430\u043B\u044C\u043D\u043E \u0438\u0437\u043C\u0435\u043D\u0438\u043B\u043E\u0441\u044C \u0432 \u044D\u0442\u043E\u043C \u043F\u0430\u043A\u0435\u0442\u0435, \u0431\u0435\u0437 \u0432\u043E\u0434\u044B.",
+    "important_news": [
+      {"title": "\u041A\u043E\u0440\u043E\u0442\u043A\u0438\u0439 \u0437\u0430\u0433\u043E\u043B\u043E\u0432\u043E\u043A \u0444\u0430\u043A\u0442\u0430", "details": "\u0427\u0442\u043E \u0438\u043C\u0435\u043D\u043D\u043E \u043F\u0440\u043E\u0438\u0437\u043E\u0448\u043B\u043E \u0438 \u0447\u0442\u043E \u044D\u0442\u043E \u043C\u0435\u043D\u044F\u0435\u0442 \u0434\u043B\u044F \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F.", "status": "confirmed", "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13260"], "external_urls": []}
+    ],
+    "confirmed_decisions": [
+      {"title": "\u0427\u0442\u043E \u0441\u0434\u0435\u043B\u0430\u0442\u044C, \u0447\u0442\u043E\u0431\u044B \u0440\u0435\u0448\u0438\u0442\u044C \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u0443", "details": "\u041A\u0442\u043E \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0434\u0438\u043B, \u043D\u0430 \u043A\u0430\u043A\u043E\u0439 \u0432\u0435\u0440\u0441\u0438\u0438 \u0438 \u0440\u0435\u0433\u0438\u043E\u043D\u0435 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442, \u043A\u0430\u043A\u0438\u0435 \u043E\u0433\u0440\u0430\u043D\u0438\u0447\u0435\u043D\u0438\u044F.", "status": "confirmed", "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13280"], "external_urls": ["https://f-droid.org/packages/net.typeblog.shelter/"]}
+    ],
+    "bugs_and_problems": [
+      {"title": "\u041D\u0430\u0437\u0432\u0430\u043D\u0438\u0435 \u0431\u0430\u0433\u0430", "details": "\u0421\u0438\u043C\u043F\u0442\u043E\u043C\u044B, \u0432\u0435\u0440\u0441\u0438\u044F \u0438 \u0440\u0435\u0433\u0438\u043E\u043D, \u0435\u0441\u0442\u044C \u043B\u0438 \u043E\u0431\u0445\u043E\u0434\u043D\u043E\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u0435.", "status": "probable", "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13300"], "external_urls": []}
+    ],
+    "rumors": [
+      {"title": "\u0421\u043B\u0443\u0445 \u0438\u043B\u0438 \u043F\u0440\u0435\u0434\u043F\u043E\u043B\u043E\u0436\u0435\u043D\u0438\u0435", "details": "\u041A\u0442\u043E \u044D\u0442\u043E \u0441\u043A\u0430\u0437\u0430\u043B \u0438 \u043F\u043E\u0447\u0435\u043C\u0443 \u044D\u0442\u043E \u0435\u0449\u0451 \u043D\u0435 \u0444\u0430\u043A\u0442.", "status": "unconfirmed", "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13320"], "external_urls": []}
+    ],
+    "links": [
+      {"url": "https://f-droid.org/packages/net.typeblog.shelter/", "annotation": "\u0417\u0430\u0447\u0435\u043C \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u044D\u0442\u0430 \u0441\u0441\u044B\u043B\u043A\u0430.", "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13280"]}
+    ],
+    "things_to_check": ["\u0427\u0442\u043E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044E \u0441\u0442\u043E\u0438\u0442 \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u043D\u0430 \u0441\u0432\u043E\u0451\u043C \u0443\u0441\u0442\u0440\u043E\u0439\u0441\u0442\u0432\u0435"],
+    "qa": [
+      {"question": "\u041A\u0430\u043A \u0440\u0435\u0448\u0438\u0442\u044C \u043A\u043E\u043D\u043A\u0440\u0435\u0442\u043D\u0443\u044E \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u0443?", "short_answer": "\u041E\u0434\u043D\u043E-\u0434\u0432\u0430 \u043F\u0440\u0435\u0434\u043B\u043E\u0436\u0435\u043D\u0438\u044F.", "detailed_answer": "\u041F\u043E\u0448\u0430\u0433\u043E\u0432\u043E, \u0441 \u0443\u0441\u043B\u043E\u0432\u0438\u044F\u043C\u0438 \u0438 \u043E\u0433\u043E\u0432\u043E\u0440\u043A\u0430\u043C\u0438.", "status": "confirmed", "tags": ["\u0437\u0430\u0440\u044F\u0434\u043A\u0430"], "device_topic": "Honor Magic 8 Pro", "source_post_urls": ["https://4pda.to/forum/index.php?showtopic=1108618&st=13260"], "external_urls": [], "first_seen_at": null, "updated_at": null, "confidence_note": "\u041F\u043E\u0447\u0435\u043C\u0443 \u0432\u044B\u0431\u0440\u0430\u043D \u0442\u0430\u043A\u043E\u0439 \u0441\u0442\u0430\u0442\u0443\u0441."}
+    ],
+    "conflicts": ["\u041F\u0440\u043E\u0448\u0438\u0432\u043A\u0443 193 \u043E\u0442\u043E\u0437\u0432\u0430\u043B\u0438: \u043E\u0434\u0438\u043D \u043F\u0438\u0448\u0435\u0442, \u0447\u0442\u043E \u0435\u0451 \u043E\u0442\u043E\u0437\u0432\u0430\u043B\u0438, \u0434\u0432\u043E\u0435 \u043F\u043E\u043B\u0443\u0447\u0438\u043B\u0438 \u0435\u0451 \u0438 \u043E\u043D\u0430 \u0440\u0430\u0431\u043E\u0442\u0430\u0435\u0442 (https://4pda.to/forum/index.php?showtopic=1108618&st=13380)"]
+  },
+  "markdown_summary": "## \u0421\u0432\u043E\u0434\u043A\u0430\\n\\n### \u0412\u0430\u0436\u043D\u044B\u0435 \u043D\u043E\u0432\u043E\u0441\u0442\u0438\\n- ...\\n\\n### \u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F\\n- ...\\n\\n### \u0411\u0430\u0433\u0438 \u0438 \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B\\n- ...\\n\\n### \u0421\u043B\u0443\u0445\u0438 \u0438 \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F\\n- ...\\n\\n### \u041F\u043E\u043B\u0435\u0437\u043D\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0438\\n- ...\\n\\n### \u0427\u0442\u043E \u0441\u0442\u043E\u0438\u0442 \u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C\\n- ...\\n\\n### Q&A\\n- **\u0412\u043E\u043F\u0440\u043E\u0441** \u2014 \u043A\u043E\u0440\u043E\u0442\u043A\u0438\u0439 \u043E\u0442\u0432\u0435\u0442."
+}`;
     const partHeader = meta.partCount ? [
       `## \u042D\u0442\u043E \u0447\u0430\u0441\u0442\u044C ${meta.partNumber || 1} \u0438\u0437 ${meta.partCount} \u043E\u0434\u043D\u043E\u0433\u043E \u043F\u0430\u043A\u0435\u0442\u0430`,
       `\u0418\u0434\u0435\u043D\u0442\u0438\u0444\u0438\u043A\u0430\u0442\u043E\u0440 \u043F\u0430\u043A\u0435\u0442\u0430: ${meta.packetId || "\u043D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u0435\u043D"}`,
@@ -1245,10 +1274,26 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       "6. \u0421\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u0435 \u043C\u043E\u0436\u0435\u0442 \u0431\u044B\u0442\u044C \u043E\u0442\u0432\u0435\u0442\u043E\u043C \u043D\u0430 \u0446\u0438\u0442\u0430\u0442\u0443 \u0438\u043B\u0438 \u0434\u0440\u0443\u0433\u043E\u0439 \u043F\u043E\u0441\u0442. \u0418\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0439 \u043F\u043E\u043B\u044F \xAB\u0426\u0438\u0442\u0430\u0442\u044B\xBB \u0438 \xAB\u0421\u0441\u044B\u043B\u043A\u0438 \u043D\u0430 \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F\xBB, \u0441\u0432\u044F\u0436\u0438 \u043E\u0442\u0432\u0435\u0442 \u0441 \u0438\u0441\u0445\u043E\u0434\u043D\u044B\u043C \u043F\u043E\u0441\u0442\u043E\u043C, \u043D\u0435 \u043F\u043E\u0432\u0442\u043E\u0440\u044F\u0439 \u0446\u0438\u0442\u0430\u0442\u0443 \u043A\u0430\u043A \u043D\u043E\u0432\u0443\u044E \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E. \u0415\u0441\u043B\u0438 \u0438\u0441\u0445\u043E\u0434\u043D\u0438\u043A \u043D\u0435 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D \u2014 \u0443\u043A\u0430\u0436\u0438, \u0447\u0442\u043E \u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442 \u043D\u0435\u043F\u043E\u043B\u043D\u044B\u0439.",
       "",
       "## \u0424\u043E\u0440\u043C\u0430\u0442 \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 \u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u0435\u043D",
-      "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0432\u0435\u0434\u0438 \u043E\u0434\u0438\u043D \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u0441\u0445\u0435\u043C\u0435 \u043D\u0438\u0436\u0435. \u0417\u0430\u0442\u0435\u043C \u043F\u043E\u0441\u043B\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 `---MARKDOWN---` \u0432\u044B\u0432\u0435\u0434\u0438 \u043F\u043E\u043B\u043D\u0443\u044E \u0447\u0438\u0442\u0430\u0435\u043C\u0443\u044E Markdown-\u0441\u0432\u043E\u0434\u043A\u0443 \u0434\u043B\u044F \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430. Markdown \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0434\u043D\u043E\u0439 \u043A\u043E\u0440\u043E\u0442\u043A\u043E\u0439 \u0444\u0440\u0430\u0437\u043E\u0439: \u043F\u043E\u0432\u0442\u043E\u0440\u0438 \u0432 \u043D\u0451\u043C \u0432\u0430\u0436\u043D\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0441\u043B\u0443\u0445\u0438, \u0441\u0441\u044B\u043B\u043A\u0438, \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0438 Q&A. \u0412\u0441\u0435 \u043C\u0430\u0441\u0441\u0438\u0432\u044B \u0434\u043E\u043B\u0436\u043D\u044B \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C, \u0434\u0430\u0436\u0435 \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u0443\u0441\u0442\u044B\u0435. \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0432 JSON \u043F\u043E\u043B\u044F \u0441 \u0434\u043E\u0433\u0430\u0434\u043A\u0430\u043C\u0438 \u0431\u0435\u0437 \u043F\u043E\u043C\u0435\u0442\u043A\u0438 \u0441\u0442\u0430\u0442\u0443\u0441\u0430.",
+      "\u0412\u044B\u0432\u0435\u0434\u0438 \u043E\u0434\u0438\u043D \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0431\u0435\u0437 \u043F\u043E\u044F\u0441\u043D\u0435\u043D\u0438\u0439 \u0441\u0442\u0440\u043E\u0433\u043E \u043F\u043E \u0441\u0445\u0435\u043C\u0435 \u043D\u0438\u0436\u0435. \u041F\u043E\u043B\u043D\u0430\u044F \u0447\u0438\u0442\u0430\u0435\u043C\u0430\u044F Markdown-\u0441\u0432\u043E\u0434\u043A\u0430 \u043E\u0431\u044F\u0437\u0430\u043D\u0430 \u043B\u0435\u0436\u0430\u0442\u044C \u0432 \u043F\u043E\u043B\u0435 `markdown_summary` (\u0441\u0442\u0440\u043E\u043A\u043E\u0439 \u0441 \u043F\u0435\u0440\u0435\u043D\u043E\u0441\u0430\u043C\u0438 `\\n`). \u0414\u043E\u043F\u043E\u043B\u043D\u0438\u0442\u0435\u043B\u044C\u043D\u043E \u043F\u043E\u0441\u043B\u0435 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u043E\u0439 \u0441\u0442\u0440\u043E\u043A\u0438 `---MARKDOWN---` \u043C\u043E\u0436\u043D\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u0438\u0442\u044C \u0442\u043E\u0442 \u0436\u0435 \u0442\u0435\u043A\u0441\u0442 \u2014 \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043D\u0438\u0435 \u043F\u0440\u0438\u043D\u0438\u043C\u0430\u0435\u0442 \u0438 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u0442\u043E\u043B\u044C\u043A\u043E \u0441 \u043F\u043E\u043B\u0435\u043C, \u0438 \u0432\u0430\u0440\u0438\u0430\u043D\u0442 \u0441 \u043E\u0442\u0434\u0435\u043B\u044C\u043D\u044B\u043C \u0431\u043B\u043E\u043A\u043E\u043C. Markdown \u043D\u0435 \u0434\u043E\u043B\u0436\u0435\u043D \u0431\u044B\u0442\u044C \u043E\u0434\u043D\u043E\u0439 \u043A\u043E\u0440\u043E\u0442\u043A\u043E\u0439 \u0444\u0440\u0430\u0437\u043E\u0439: \u043F\u043E\u0432\u0442\u043E\u0440\u0438 \u0432 \u043D\u0451\u043C \u0432\u0430\u0436\u043D\u044B\u0435 \u0438\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u044F, \u0440\u0435\u0448\u0435\u043D\u0438\u044F, \u043F\u0440\u043E\u0431\u043B\u0435\u043C\u044B, \u0441\u043B\u0443\u0445\u0438, \u0441\u0441\u044B\u043B\u043A\u0438, \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438 \u0438 Q&A. \u0412\u0441\u0435 \u043C\u0430\u0441\u0441\u0438\u0432\u044B \u0434\u043E\u043B\u0436\u043D\u044B \u043F\u0440\u0438\u0441\u0443\u0442\u0441\u0442\u0432\u043E\u0432\u0430\u0442\u044C, \u0434\u0430\u0436\u0435 \u0435\u0441\u043B\u0438 \u043E\u043D\u0438 \u043F\u0443\u0441\u0442\u044B\u0435. \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u0432 JSON \u043F\u043E\u043B\u044F \u0441 \u0434\u043E\u0433\u0430\u0434\u043A\u0430\u043C\u0438 \u0431\u0435\u0437 \u043F\u043E\u043C\u0435\u0442\u043A\u0438 \u0441\u0442\u0430\u0442\u0443\u0441\u0430.",
       "\u0421\u0445\u0435\u043C\u0430 (\u044D\u043A\u0432\u0438\u0432\u0430\u043B\u0435\u043D\u0442\u043D\u0430\u044F \u0441\u0442\u0440\u043E\u0433\u0430\u044F JSON Schema):",
       "```json",
       responseSchema,
+      "```",
+      "",
+      "## \u041F\u0440\u0430\u0432\u0438\u043B\u0430 \u0444\u043E\u0440\u043C\u0430\u0442\u0430, \u043A\u043E\u0442\u043E\u0440\u044B\u0435 \u0447\u0430\u0449\u0435 \u0432\u0441\u0435\u0433\u043E \u043D\u0430\u0440\u0443\u0448\u0430\u044E\u0442. \u041F\u0440\u043E\u0432\u0435\u0440\u044C \u0438\u0445 \u043F\u0435\u0440\u0435\u0434 \u0432\u044B\u0434\u0430\u0447\u0435\u0439",
+      "1. `report.conflicts` \u2014 \u043C\u0430\u0441\u0441\u0438\u0432 \u0421\u0422\u0420\u041E\u041A, \u0430 \u043D\u0435 \u043E\u0431\u044A\u0435\u043A\u0442\u043E\u0432. \u041E\u0434\u043D\u0430 \u0441\u0442\u0440\u043E\u043A\u0430 = \u043E\u0434\u043D\u043E \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u0435: \xAB\u0443\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u0435 \u2014 \u0432 \u0447\u0451\u043C \u0440\u0430\u0441\u0445\u043E\u0434\u044F\u0442\u0441\u044F \u0441\u043E\u043E\u0431\u0449\u0435\u043D\u0438\u044F \u2014 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\xBB.",
+      '   \u041F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u043E: `"conflicts": ["\u041F\u0440\u043E\u0448\u0438\u0432\u043A\u0443 193 \u043E\u0442\u043E\u0437\u0432\u0430\u043B\u0438: \u043E\u0434\u0438\u043D \u043F\u0438\u0448\u0435\u0442, \u0447\u0442\u043E \u043E\u0442\u043E\u0437\u0432\u0430\u043B\u0438, \u0434\u0432\u043E\u0435 \u043F\u043E\u043B\u0443\u0447\u0438\u043B\u0438 (https://4pda.to/forum/index.php?showtopic=1108618&st=13380)"]`',
+      '   \u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u043E: `"conflicts": [{"title": "...", "description": "..."}]`',
+      "2. \u0412\u0441\u0435 \u0430\u0434\u0440\u0435\u0441\u0430 \u2014 \u043E\u0431\u044B\u0447\u043D\u044B\u043C URL \u0431\u0435\u0437 Markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438 \u0438 \u0431\u0435\u0437 HTML-\u044D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F: `https://4pda.to/forum/index.php?showtopic=1108618&st=13260`.",
+      '   \u041D\u0435\u043F\u0440\u0430\u0432\u0438\u043B\u044C\u043D\u043E: `"[https://4pda.to/...](https://4pda.to/...)"`, `&amp;`, `<https://...>`, \u0442\u0435\u043A\u0441\u0442 \u0432\u043E\u043A\u0440\u0443\u0433 \u0441\u0441\u044B\u043B\u043A\u0438.',
+      "3. `status` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F \u0438\u0437 \u0441\u0445\u0435\u043C\u044B: `confirmed`, `probable`, `unconfirmed`, `conflicting` (\u0432 Q&A \u0435\u0449\u0451 `outdated`). \u041D\u0438\u043A\u0430\u043A\u0438\u0445 \u0441\u043B\u043E\u0432 \u0432\u0440\u043E\u0434\u0435 \xAB\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E\xBB \u0438\u043B\u0438 \xAB\u0440\u0435\u0448\u0435\u043D\u043E\xBB.",
+      "4. \u041F\u0443\u0441\u0442\u043E\u0439 \u0441\u043F\u0438\u0441\u043E\u043A \u2014 `[]`, \u0430 \u043D\u0435 `null` \u0438 \u043D\u0435 \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0435\u0435 \u043F\u043E\u043B\u0435. `null` \u0434\u043E\u043F\u0443\u0441\u0442\u0438\u043C \u0442\u043E\u043B\u044C\u043A\u043E \u0432 `period.from`, `period.to`, `qa[].first_seen_at`, `qa[].updated_at`.",
+      "5. \u041D\u0435 \u0434\u043E\u0431\u0430\u0432\u043B\u044F\u0439 \u043F\u043E\u043B\u044F, \u043A\u043E\u0442\u043E\u0440\u044B\u0445 \u043D\u0435\u0442 \u0432 \u0441\u0445\u0435\u043C\u0435. \u041D\u0435 \u043F\u0438\u0448\u0438 \u0442\u0435\u043A\u0441\u0442 \u0434\u043E JSON, \u0432\u043D\u0443\u0442\u0440\u0438 JSON \u0438 \u043C\u0435\u0436\u0434\u0443 JSON \u0438 `---MARKDOWN---`. \u0411\u0435\u0437 \u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0435\u0432 \u0438 \u0431\u0435\u0437 \u0437\u0430\u0432\u0435\u0440\u0448\u0430\u044E\u0449\u0438\u0445 \u0437\u0430\u043F\u044F\u0442\u044B\u0445.",
+      "6. \u041D\u0435 \u043E\u0431\u043E\u0440\u0430\u0447\u0438\u0432\u0430\u0439 JSON \u0432 ```json ... ``` \u2014 \u043E\u0442\u0434\u0430\u0439 \u0435\u0433\u043E \u043A\u0430\u043A \u0435\u0441\u0442\u044C, \u0447\u0442\u043E\u0431\u044B \u0435\u0433\u043E \u043C\u043E\u0436\u043D\u043E \u0431\u044B\u043B\u043E \u0441\u043E\u0445\u0440\u0430\u043D\u0438\u0442\u044C \u0432 \u0444\u0430\u0439\u043B \u0438 \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u0442\u044C.",
+      "",
+      "## \u0428\u0430\u0431\u043B\u043E\u043D \u043E\u0442\u0432\u0435\u0442\u0430 \u2014 \u0437\u0430\u043F\u043E\u043B\u043D\u0438 \u0435\u0433\u043E \u0440\u0435\u0430\u043B\u044C\u043D\u044B\u043C\u0438 \u0434\u0430\u043D\u043D\u044B\u043C\u0438 \u044D\u0442\u043E\u0433\u043E \u043F\u0430\u043A\u0435\u0442\u0430, \u043D\u0438\u0447\u0435\u0433\u043E \u043D\u0435 \u0432\u044B\u0434\u0443\u043C\u044B\u0432\u0430\u044F",
+      "```json",
+      responseTemplate,
       "```",
       "",
       "## \u041C\u0435\u0442\u0430\u0434\u0430\u043D\u043D\u044B\u0435 \u043F\u0430\u043A\u0435\u0442\u0430",
@@ -1365,7 +1410,8 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       "",
       "\u041D\u0438\u0436\u0435 \u0431\u0443\u0434\u0443\u0442 \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u044B \u043F\u0440\u043E\u043C\u0435\u0436\u0443\u0442\u043E\u0447\u043D\u044B\u0435 \u043E\u0442\u0432\u0435\u0442\u044B \u0418\u0418 \u043F\u043E \u0432\u0441\u0435\u043C \u0447\u0430\u0441\u0442\u044F\u043C. \u041E\u0431\u044A\u0435\u0434\u0438\u043D\u0438 \u0438\u0445 \u0432 \u043E\u0434\u0438\u043D \u0438\u0442\u043E\u0433\u043E\u0432\u044B\u0439 \u043E\u0442\u0447\u0451\u0442.",
       "\u0423\u0434\u0430\u043B\u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u044B, \u0441\u043E\u0445\u0440\u0430\u043D\u0438 \u0442\u043E\u043B\u044C\u043A\u043E \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0441\u0441\u044B\u043B\u043A\u0430\u043C\u0438 \u0444\u0430\u043A\u0442\u044B, \u043E\u0442\u043C\u0435\u0442\u044C \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F \u0438 \u043D\u0435 \u043F\u0440\u0438\u0434\u0443\u043C\u044B\u0432\u0430\u0439 \u0438\u043D\u0444\u043E\u0440\u043C\u0430\u0446\u0438\u044E.",
-      "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0432\u0435\u0434\u0438 \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u0442\u0440\u043E\u0433\u043E \u0441\u0445\u0435\u043C\u044B 1.0 \u0438\u0437 prompt \u0447\u0430\u0441\u0442\u0435\u0439, \u0437\u0430\u0442\u0435\u043C \u0441\u0442\u0440\u043E\u043A\u0443 ---MARKDOWN--- \u0438 \u0443\u0434\u043E\u0431\u043D\u0443\u044E Markdown-\u0441\u0432\u043E\u0434\u043A\u0443.",
+      "\u0421\u043D\u0430\u0447\u0430\u043B\u0430 \u0432\u044B\u0432\u0435\u0434\u0438 \u0432\u0430\u043B\u0438\u0434\u043D\u044B\u0439 JSON \u0441\u0442\u0440\u043E\u0433\u043E \u0441\u0445\u0435\u043C\u044B 1.0 \u0438\u0437 prompt \u0447\u0430\u0441\u0442\u0435\u0439. \u041F\u043E\u043B\u043D\u0443\u044E Markdown-\u0441\u0432\u043E\u0434\u043A\u0443 \u043F\u043E\u043B\u043E\u0436\u0438 \u0432 \u043F\u043E\u043B\u0435 `markdown_summary`; \u043F\u0440\u0438 \u0436\u0435\u043B\u0430\u043D\u0438\u0438 \u043F\u043E\u0432\u0442\u043E\u0440\u0438 \u0435\u0451 \u043F\u043E\u0441\u043B\u0435 \u0441\u0442\u0440\u043E\u043A\u0438 ---MARKDOWN---.",
+      "\u0424\u043E\u0440\u043C\u0430\u0442 \u0442\u043E\u0442 \u0436\u0435, \u0447\u0442\u043E \u0432 prompt \u0447\u0430\u0441\u0442\u0435\u0439: `report.conflicts` \u2014 \u043C\u0430\u0441\u0441\u0438\u0432 \u0441\u0442\u0440\u043E\u043A; \u0432\u0441\u0435 URL \u2014 \u043E\u0431\u044B\u0447\u043D\u044B\u043C\u0438 \u0430\u0434\u0440\u0435\u0441\u0430\u043C\u0438 \u0431\u0435\u0437 Markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438 \u0438 \u0431\u0435\u0437 `&amp;`; `status` \u2014 \u0442\u043E\u043B\u044C\u043A\u043E `confirmed`, `probable`, `unconfirmed`, `outdated`, `conflicting`; \u043F\u0443\u0441\u0442\u044B\u0435 \u0441\u043F\u0438\u0441\u043A\u0438 \u2014 `[]`, \u0430 \u043D\u0435 `null`.",
       "\u0415\u0441\u043B\u0438 \u043A\u0430\u043A\u0430\u044F-\u0442\u043E \u0447\u0430\u0441\u0442\u044C \u043D\u0435 \u0432\u0441\u0442\u0430\u0432\u043B\u0435\u043D\u0430, \u0443\u043A\u0430\u0436\u0438 \u044D\u0442\u043E \u0432 overview \u0438\u043B\u0438 conflicts, \u0430 \u043D\u0435 \u0434\u0435\u043B\u0430\u0439 \u0432\u0438\u0434, \u0447\u0442\u043E \u0430\u043D\u0430\u043B\u0438\u0437 \u043F\u043E\u043B\u043E\u043D.",
       "",
       "## \u041F\u0440\u043E\u043C\u0435\u0436\u0443\u0442\u043E\u0447\u043D\u044B\u0435 \u043E\u0442\u0432\u0435\u0442\u044B",
@@ -1654,6 +1700,227 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     }
     return "";
   }
+  var HTML_ENTITIES = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " "
+  };
+  function decodeHtmlEntities(value) {
+    return value.replace(/&(#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, code) => {
+      const key = code.toLowerCase();
+      if (HTML_ENTITIES[key]) return HTML_ENTITIES[key];
+      if (!key.startsWith("#")) return match;
+      const point = key.startsWith("#x") ? Number.parseInt(key.slice(2), 16) : Number.parseInt(key.slice(1), 10);
+      if (!Number.isFinite(point) || point < 32 || point > 1114111) return match;
+      try {
+        return String.fromCodePoint(point);
+      } catch {
+        return match;
+      }
+    });
+  }
+  var MARKDOWN_LINK = /^\[([^\]]*)\]\(\s*<?([^)\s>]+)>?[^)]*\)$/s;
+  function cleanUrlValue(value) {
+    let url = decodeHtmlEntities(value).trim();
+    const link = MARKDOWN_LINK.exec(url);
+    if (link) url = (link[2] || link[1] || "").trim();
+    url = decodeHtmlEntities(url).replace(/^<(.*)>$/s, "$1").trim();
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
+      const inline = /(https?:\/\/[^\s"'<>()[\],]+)/i.exec(url);
+      if (inline?.[1]) url = inline[1];
+    }
+    return url.replace(/[,.;:]+$/, "");
+  }
+  function normalizeUrlList(value, stats) {
+    if (value === void 0 || value === null) return [];
+    const items = Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+    const urls = [];
+    for (const item of items) {
+      if (typeof item !== "string") continue;
+      const cleaned = cleanUrlValue(item);
+      if (!cleaned) continue;
+      if (cleaned !== item.trim()) stats.urls += 1;
+      if (!urls.includes(cleaned)) urls.push(cleaned);
+    }
+    return urls;
+  }
+  var STATUS_ALIASES = {
+    confirmed: "confirmed",
+    verified: "confirmed",
+    \u0440\u0435\u0448\u0435\u043D\u043E: "confirmed",
+    \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E: "confirmed",
+    \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D: "confirmed",
+    \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0430: "confirmed",
+    "\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F\u043C\u0438": "confirmed",
+    probable: "probable",
+    likely: "probable",
+    \u0432\u0435\u0440\u043E\u044F\u0442\u043D\u043E: "probable",
+    \u0432\u043E\u0437\u043C\u043E\u0436\u043D\u043E: "probable",
+    "\u0447\u0430\u0441\u0442\u0438\u0447\u043D\u043E \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E": "probable",
+    unconfirmed: "unconfirmed",
+    unverified: "unconfirmed",
+    unknown: "unconfirmed",
+    "\u043D\u0435 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E": "unconfirmed",
+    \u043D\u0435\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u043E: "unconfirmed",
+    "\u0431\u0435\u0437 \u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043D\u0438\u044F": "unconfirmed",
+    outdated: "outdated",
+    stale: "outdated",
+    \u0443\u0441\u0442\u0430\u0440\u0435\u043B\u043E: "outdated",
+    \u0443\u0441\u0442\u0430\u0440\u0435\u0432\u0448\u0435\u0435: "outdated",
+    "\u043D\u0435 \u0430\u043A\u0442\u0443\u0430\u043B\u044C\u043D\u043E": "outdated",
+    conflicting: "conflicting",
+    disputed: "conflicting",
+    \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u0432\u043E: "conflicting",
+    \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u0435: "conflicting",
+    \u043F\u0440\u043E\u0442\u0438\u0432\u043E\u0440\u0435\u0447\u0438\u044F: "conflicting"
+  };
+  function normalizeStatus(value, stats) {
+    if (typeof value !== "string") return value;
+    const raw = value.trim();
+    const key = raw.toLowerCase().replace(/\s+/g, " ").replace(/[.!?]+$/, "");
+    const mapped = STATUS_ALIASES[key];
+    if (mapped && mapped !== raw) {
+      stats.statuses += 1;
+      return mapped;
+    }
+    return raw;
+  }
+  var ROOT_FIELDS = ["schema_version", "report", "markdown_summary"];
+  var SUMMARY_ALIASES = ["summary", "markdown", "human_summary", "readable_summary"];
+  var REPORT_FIELDS = [
+    "title",
+    "period",
+    "overview",
+    "important_news",
+    "confirmed_decisions",
+    "bugs_and_problems",
+    "rumors",
+    "links",
+    "things_to_check",
+    "qa",
+    "conflicts"
+  ];
+  var SECTION_FIELDS = ["title", "details", "status", "source_post_urls", "external_urls"];
+  var LINK_FIELDS = ["url", "annotation", "source_post_urls"];
+  var QA_FIELDS = [
+    "question",
+    "short_answer",
+    "detailed_answer",
+    "status",
+    "tags",
+    "device_topic",
+    "source_post_urls",
+    "external_urls",
+    "first_seen_at",
+    "updated_at",
+    "confidence_note"
+  ];
+  function pickKnown(source, allowed, path, stats) {
+    const result = {};
+    for (const [key, value] of Object.entries(source)) {
+      if (allowed.includes(key)) result[key] = value;
+      else if (stats.dropped.length < 12) stats.dropped.push(`${path}.${key}`);
+    }
+    return result;
+  }
+  function conflictText(value) {
+    if (typeof value === "string") return value.trim();
+    if (!isRecord(value)) return "";
+    const text = (...fields) => {
+      for (const field of fields) {
+        const item = value[field];
+        if (typeof item === "string" && item.trim()) return item.trim();
+      }
+      return "";
+    };
+    const title = text("title", "name", "topic", "question");
+    const details = text("description", "details", "text", "note", "comment");
+    const urls = normalizeUrlList(value.source_post_urls ?? value.urls ?? value.source_urls, {
+      urls: 0,
+      statuses: 0,
+      conflicts: 0,
+      dropped: []
+    });
+    const body = [title, details].filter(Boolean).join(" \u2014 ");
+    if (!body) return "";
+    return urls.length ? `${body} (\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438: ${urls.join(", ")})` : body;
+  }
+  function normalizeAiAnswer(input) {
+    if (!isRecord(input)) return { value: input, notes: [] };
+    const stats = { urls: 0, statuses: 0, conflicts: 0, dropped: [] };
+    const notes = [];
+    const root = {};
+    for (const field of ROOT_FIELDS) if (input[field] !== void 0) root[field] = input[field];
+    if (typeof root.markdown_summary !== "string") {
+      const alias = SUMMARY_ALIASES.find((key) => typeof input[key] === "string");
+      if (alias) {
+        root.markdown_summary = input[alias];
+        notes.push(`markdown_summary \u0432\u0437\u044F\u0442 \u0438\u0437 \u043F\u043E\u043B\u044F ${alias}.`);
+      }
+    }
+    if (typeof root.markdown_summary === "string") root.markdown_summary = decodeHtmlEntities(root.markdown_summary);
+    for (const key of Object.keys(input)) {
+      if (!ROOT_FIELDS.includes(key) && !SUMMARY_ALIASES.includes(key)) {
+        if (stats.dropped.length < 12) stats.dropped.push(`root.${key}`);
+      }
+    }
+    if (isRecord(root.report)) {
+      const report = pickKnown(root.report, REPORT_FIELDS, "report", stats);
+      if (isRecord(report.period)) report.period = pickKnown(report.period, ["from", "to"], "report.period", stats);
+      for (const section of SECTION_NAMES) {
+        if (!Array.isArray(report[section])) continue;
+        report[section] = report[section].map((item) => {
+          if (!isRecord(item)) return item;
+          const fixed = pickKnown(item, SECTION_FIELDS, `report.${section}[]`, stats);
+          if ("status" in fixed) fixed.status = normalizeStatus(fixed.status, stats);
+          fixed.source_post_urls = normalizeUrlList(fixed.source_post_urls, stats);
+          fixed.external_urls = normalizeUrlList(fixed.external_urls, stats);
+          return fixed;
+        });
+      }
+      if (Array.isArray(report.links)) {
+        report.links = report.links.map((item) => {
+          if (!isRecord(item)) return item;
+          const fixed = pickKnown(item, LINK_FIELDS, "report.links[]", stats);
+          if (typeof fixed.url === "string") {
+            const cleaned = cleanUrlValue(fixed.url);
+            if (cleaned !== fixed.url.trim()) stats.urls += 1;
+            fixed.url = cleaned;
+          }
+          fixed.source_post_urls = normalizeUrlList(fixed.source_post_urls, stats);
+          return fixed;
+        });
+      }
+      if (Array.isArray(report.qa)) {
+        report.qa = report.qa.map((item) => {
+          if (!isRecord(item)) return item;
+          const fixed = pickKnown(item, QA_FIELDS, "report.qa[]", stats);
+          if ("status" in fixed) fixed.status = normalizeStatus(fixed.status, stats);
+          fixed.source_post_urls = normalizeUrlList(fixed.source_post_urls, stats);
+          fixed.external_urls = normalizeUrlList(fixed.external_urls, stats);
+          return fixed;
+        });
+      }
+      if (report.things_to_check !== void 0 && !Array.isArray(report.things_to_check)) {
+        if (typeof report.things_to_check === "string") report.things_to_check = [report.things_to_check];
+      }
+      if (report.conflicts !== void 0) {
+        const list = Array.isArray(report.conflicts) ? report.conflicts : [report.conflicts];
+        stats.conflicts += list.filter((item) => isRecord(item)).length;
+        report.conflicts = list.map(conflictText).filter((item) => item.length > 0);
+      }
+      root.report = report;
+    }
+    if (stats.conflicts > 0) notes.push(`report.conflicts: ${stats.conflicts} \u043E\u0431\u044A\u0435\u043A\u0442(\u0430) \u0437\u0430\u043C\u0435\u043D\u0435\u043D\u044B \u043D\u0430 \u0441\u0442\u0440\u043E\u043A\u0438.`);
+    if (stats.urls > 0) notes.push(`\u0421\u0441\u044B\u043B\u043A\u0438 \u043E\u0447\u0438\u0449\u0435\u043D\u044B \u043E\u0442 Markdown-\u043E\u0431\u0451\u0440\u0442\u043A\u0438 \u0438 HTML-\u044D\u043A\u0440\u0430\u043D\u0438\u0440\u043E\u0432\u0430\u043D\u0438\u044F: ${stats.urls} \u0448\u0442.`);
+    if (stats.statuses > 0) notes.push(`\u0421\u0442\u0430\u0442\u0443\u0441\u044B \u043F\u0440\u0438\u0432\u0435\u0434\u0435\u043D\u044B \u043A \u0437\u043D\u0430\u0447\u0435\u043D\u0438\u044F\u043C \u0441\u0445\u0435\u043C\u044B: ${stats.statuses} \u0448\u0442.`);
+    if (stats.dropped.length > 0)
+      notes.push(`\u041F\u043E\u043B\u044F \u0432\u043D\u0435 \u0441\u0445\u0435\u043C\u044B \u0443\u0431\u0440\u0430\u043D\u044B (\u0438\u0441\u0445\u043E\u0434\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D): ${stats.dropped.join(", ")}.`);
+    return { value: root, notes };
+  }
   function repairMissingFields(input, humanSummary) {
     if (!isRecord(input)) return { value: input, warnings: [] };
     const root = { ...input };
@@ -1895,28 +2162,38 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
     let payload = null;
     let validJson = false;
     const jsonText = findJsonObject(text);
-    const humanSummary = extractHumanSummary(text, jsonText);
+    let humanSummary = decodeHtmlEntities(extractHumanSummary(text, jsonText));
     let repairedJson = false;
     if (jsonText) {
       try {
         const parsed = JSON.parse(jsonText);
-        const validation = validateAiResponse(parsed);
-        if (!validation.valid) {
-          const repaired = repairMissingFields(parsed, humanSummary);
+        const normalized = normalizeAiAnswer(parsed);
+        if (isRecord(normalized.value) && typeof normalized.value.markdown_summary === "string") {
+          const jsonSummary = normalized.value.markdown_summary.trim();
+          if (jsonSummary) humanSummary = humanSummary || jsonSummary;
+        }
+        const validation = validateAiResponse(normalized.value);
+        if (validation.valid && validation.value) {
+          payload = validation.value;
+          validJson = true;
+          if (normalized.notes.length > 0) {
+            repairedJson = true;
+            warnings.push("\u0424\u043E\u0440\u043C\u0430\u0442 \u043E\u0442\u0432\u0435\u0442\u0430 \u0418\u0418 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438 \u043F\u0440\u0438\u0432\u0435\u0434\u0451\u043D \u043A \u0441\u0445\u0435\u043C\u0435 1.0.");
+            warnings.push(...normalized.notes.slice(0, 10));
+          }
+        } else {
+          const repaired = repairMissingFields(normalized.value, humanSummary);
           const repairedValidation = validateAiResponse(repaired.value);
           if (repairedValidation.valid && repairedValidation.value) {
             payload = repairedValidation.value;
             validJson = true;
-            repairedJson = repaired.warnings.length > 0;
-            warnings.push("JSON \u043F\u0440\u0438\u043D\u044F\u0442 \u043F\u043E\u0441\u043B\u0435 \u0431\u0435\u0437\u043E\u043F\u0430\u0441\u043D\u043E\u0433\u043E \u0434\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u0438\u044F \u043E\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044E\u0449\u0438\u0445 \u043D\u0435\u043E\u0431\u044F\u0437\u0430\u0442\u0435\u043B\u044C\u043D\u044B\u0445 \u043F\u043E\u043B\u0435\u0439.");
-            warnings.push(...repaired.warnings.slice(0, 10));
+            repairedJson = true;
+            warnings.push("JSON \u043F\u0440\u0438\u043D\u044F\u0442 \u043F\u043E\u0441\u043B\u0435 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u043E\u0433\u043E \u043F\u0440\u0438\u0432\u0435\u0434\u0435\u043D\u0438\u044F \u043F\u043E\u043B\u0435\u0439 \u043A \u0441\u0445\u0435\u043C\u0435 1.0.");
+            warnings.push(...normalized.notes.slice(0, 5), ...repaired.warnings.slice(0, 5));
           } else {
-            warnings.push("JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043D\u0435 \u043F\u0440\u043E\u0448\u0451\u043B \u0441\u0442\u0440\u043E\u0433\u0443\u044E \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443. \u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 \u043E\u0431\u044B\u0447\u043D\u0430\u044F Markdown-\u0441\u0432\u043E\u0434\u043A\u0430.");
-            warnings.push(...validation.errors.slice(0, 10));
+            warnings.push("JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043D\u0435 \u043F\u0440\u043E\u0448\u0451\u043B \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0443 \u0434\u0430\u0436\u0435 \u043F\u043E\u0441\u043B\u0435 \u0430\u0432\u0442\u043E\u0438\u0441\u043F\u0440\u0430\u0432\u043B\u0435\u043D\u0438\u044F. \u0421\u043E\u0445\u0440\u0430\u043D\u0435\u043D\u0430 Markdown-\u0441\u0432\u043E\u0434\u043A\u0430.");
+            warnings.push(...repairedValidation.errors.slice(0, 10));
           }
-        } else if (validation.value) {
-          payload = validation.value;
-          validJson = true;
         }
       } catch (error) {
         warnings.push(`JSON \u043D\u0430\u0439\u0434\u0435\u043D, \u043D\u043E \u043F\u043E\u0432\u0440\u0435\u0436\u0434\u0451\u043D: ${error instanceof Error ? error.message : String(error)}`);
@@ -1925,7 +2202,7 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
       warnings.push("\u0412 \u043E\u0442\u0432\u0435\u0442\u0435 \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D JSON-\u0431\u043B\u043E\u043A; \u0438\u043C\u043F\u043E\u0440\u0442\u0438\u0440\u043E\u0432\u0430\u043D \u043A\u0430\u043A Markdown.");
     }
     const markdown = markdownQa(humanSummary || text);
-    const summaryForStorage = humanSummary || "";
+    const summaryForStorage = humanSummary;
     if (!payload) payload = fallbackPayload(summaryForStorage || text, markdown.entries);
     if (payload.report.qa.length === 0 && markdown.entries.length > 0) {
       payload.report.qa = markdown.entries;
