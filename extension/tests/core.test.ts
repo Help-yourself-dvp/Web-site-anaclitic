@@ -663,3 +663,69 @@ describe('удаление одной выжимки', () => {
     expect(container.querySelector('.report-remove')).toBe(null);
   });
 });
+
+describe('дата публикации не берётся из текста сообщения', () => {
+  it('голое время больше не превращается в сегодняшнюю дату', () => {
+    expect(parseForumDate('13:27', new Date(2026, 8, 2, 12, 0))).toBe(null);
+  });
+
+  it('время и дата внутри поста не перекрывают штамп сообщения', () => {
+    const { document } = parseHTML(`
+      <table><tr>
+        <td class="post2"><span class="normalname"><a href="?showuser=1">Иван</a></span></td>
+        <td class="post2" id="post-main-321">
+          <a href="?showtopic=1108618&view=findpost&p=321">#321</a> 12.08.26, 09:15
+          <div class="postcolor" id="post-321">
+            Был в сети в 13:27, обсуждали событие 05.03.26, 10:00 и обновление 10.0.0.193.
+          </div>
+        </td>
+      </tr></table>`);
+    const result = fourPdaAdapter.parse(
+      document as unknown as Document,
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13260',
+      { sourceId: '4pda:1108618', topicId: '1108618', imageMode: 'links', imageKeywords: [], manualSelection: null },
+    );
+    const date = new Date(result.posts[0]?.posted_at || '');
+    expect([date.getFullYear(), date.getMonth() + 1, date.getDate()]).toEqual([2026, 8, 12]);
+  });
+
+  it('период пакета не уезжает в сегодня из-за времени в тексте постов', () => {
+    const posts = [
+      { ...post('1', 'был в 13:27'), posted_at: new Date(2026, 3, 17, 8, 0).toISOString() },
+      { ...post('2', 'обсуждали 05.03.26, 10:00'), posted_at: new Date(2026, 7, 12, 9, 15).toISOString() },
+    ];
+    const packet = createAiPacket(posts);
+    const line = packet.prompt_md.split('\n').find((item) => item.startsWith('Период новых сообщений')) || '';
+    expect(line).toContain(posts[0]?.posted_at as string);
+    expect(line).toContain(posts[1]?.posted_at as string);
+  });
+});
+
+describe('сводку можно свернуть', () => {
+  const reports = [
+    importAiResponse('## Сводка A\nТекст A', 'source', 'topic').report,
+    importAiResponse('## Сводка B\nТекст B', 'source', 'topic').report,
+  ];
+
+  it('сводка лежит в раскрывающемся блоке с подписью', () => {
+    const { document } = parseHTML('<div id="reports"></div>');
+    const container = document.getElementById('reports') as unknown as HTMLElement;
+    renderSavedReports(container, reports);
+    const box = container.querySelector('.report-summary-box');
+    expect(box?.tagName.toLowerCase()).toBe('details');
+    expect(box?.querySelector('summary')?.textContent).toBe('Сводка');
+    // «Свернуть все разделы» закрывает любые details, включая сводку
+    container.querySelectorAll('details').forEach((details) => {
+      details.open = false;
+    });
+    expect((box as unknown as { open: boolean }).open).toBe(false);
+  });
+
+  it('помечает самую свежую выжимку', () => {
+    const { document } = parseHTML('<div id="reports"></div>');
+    const container = document.getElementById('reports') as unknown as HTMLElement;
+    renderSavedReports(container, reports);
+    expect(container.textContent).toContain('последняя выжимка');
+    expect(container.querySelectorAll('.report-latest').length).toBe(1);
+  });
+});

@@ -816,12 +816,18 @@
       container.textContent = "\u041F\u043E\u043A\u0430 \u043D\u0435\u0442 \u0441\u043E\u0445\u0440\u0430\u043D\u0451\u043D\u043D\u044B\u0445 \u043E\u0442\u0432\u0435\u0442\u043E\u0432 \u0418\u0418.";
       return;
     }
-    for (const report of reports) {
+    for (const [index, report] of reports.entries()) {
       const facts = report.structured_facts;
       const item = doc.createElement("div");
       item.className = "saved-report";
       const title = doc.createElement("strong");
       title.textContent = facts.title || "\u0421\u0432\u043E\u0434\u043A\u0430 \u0431\u0435\u0437 \u043D\u0430\u0437\u0432\u0430\u043D\u0438\u044F";
+      if (index === 0 && reports.length > 1) {
+        const latest = doc.createElement("span");
+        latest.className = "report-badge report-latest";
+        latest.textContent = "\u043F\u043E\u0441\u043B\u0435\u0434\u043D\u044F\u044F \u0432\u044B\u0436\u0438\u043C\u043A\u0430";
+        title.append(" ", latest);
+      }
       const sections = [
         ["\u0412\u0430\u0436\u043D\u044B\u0435 \u043D\u043E\u0432\u043E\u0441\u0442\u0438", facts.important_news],
         ["\u041F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0451\u043D\u043D\u044B\u0435 \u0440\u0435\u0448\u0435\u043D\u0438\u044F", facts.confirmed_decisions],
@@ -842,10 +848,16 @@
         merged > 0 ? `\u041E\u0431\u044A\u0435\u0434\u0438\u043D\u0435\u043D\u043E \u043F\u043E\u0432\u0442\u043E\u0440\u043E\u0432: ${merged}` : "",
         `\u0421\u0441\u044B\u043B\u043E\u043A \u043D\u0430 \u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0438: ${sourceCount}`
       ].filter(Boolean).join(" \xB7 ");
+      const summaryBox = doc.createElement("details");
+      summaryBox.className = "report-summary-box";
+      summaryBox.open = true;
+      const summaryCaption = doc.createElement("summary");
+      summaryCaption.textContent = "\u0421\u0432\u043E\u0434\u043A\u0430";
       const summary = doc.createElement("div");
       summary.className = "report-summary";
       summary.textContent = report.parsed_summary || "\u0421\u0432\u043E\u0434\u043A\u0430 \u043F\u0443\u0441\u0442\u0430\u044F.";
-      item.append(title, meta, summary);
+      summaryBox.append(summaryCaption, summary);
+      item.append(title, meta, summaryBox);
       for (const [caption] of sections) {
         const own = [...groups.values()].filter((entry) => entry.caption === caption);
         appendSection(doc, item, caption, own.length, (body) => {
@@ -1103,9 +1115,12 @@
     storageInfo.textContent = `${message} \u042D\u0442\u043E \u043C\u0435\u0441\u0442\u043E \u043D\u0430 \u0434\u0438\u0441\u043A\u0435, \u0430 \u043D\u0435 \u043F\u043E\u0441\u0442\u043E\u044F\u043D\u043D\u0430\u044F \u043E\u043F\u0435\u0440\u0430\u0442\u0438\u0432\u043D\u0430\u044F \u043F\u0430\u043C\u044F\u0442\u044C.`;
     storageFooter.textContent = `\u0411\u0430\u0437\u0430: ${formatBytes(usage)}`;
   }
+  var IMPORTANT_DIAGNOSTICS = /не найдена дата|Внимание|ошибка|403|429|captcha|защит|checkpoint не найден|не распознан/i;
   function renderDiagnostics(items) {
     diagnostics.replaceChildren();
-    for (const text of items.slice(-30)) {
+    const important = items.filter((text) => IMPORTANT_DIAGNOSTICS.test(text));
+    const rest = items.filter((text) => !IMPORTANT_DIAGNOSTICS.test(text)).slice(-30);
+    for (const text of [.../* @__PURE__ */ new Set([...important, ...rest])].slice(0, 60)) {
       const item = document.createElement("li");
       item.textContent = text;
       diagnostics.append(item);
@@ -1276,7 +1291,8 @@
         };
         promptPreview.value = packet.markdown;
         copyButton.textContent = "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0432\u0435\u0441\u044C prompt";
-        packageStatus.textContent = `${selectedFormats.length} \u0435\u0434\u0438\u043D\u044B\u0439 \u0444\u0430\u0439\u043B(\u0430) \u0433\u043E\u0442\u043E\u0432\u044B: ${packet.post_count} \u043D\u043E\u0432\u044B\u0445 \u043F\u043E\u0441\u0442\u043E\u0432 \u0438 ${packet.context_count} \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0445 \u0441\u0442\u0430\u0440\u044B\u0445.`;
+        const periodLine = packet.markdown.match(/^Период новых сообщений: .*$/m)?.[0] || "";
+        packageStatus.textContent = `${selectedFormats.length} \u0435\u0434\u0438\u043D\u044B\u0439 \u0444\u0430\u0439\u043B(\u0430) \u0433\u043E\u0442\u043E\u0432\u044B: ${packet.post_count} \u043D\u043E\u0432\u044B\u0445 \u043F\u043E\u0441\u0442\u043E\u0432 \u0438 ${packet.context_count} \u0441\u0432\u044F\u0437\u0430\u043D\u043D\u044B\u0445 \u0441\u0442\u0430\u0440\u044B\u0445. ${periodLine}`.trim();
         for (const format of selectedFormats) {
           const file = files2[format];
           downloadText(file[0], file[1], file[2]);

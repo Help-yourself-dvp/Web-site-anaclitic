@@ -176,9 +176,16 @@ async function refreshStorageInfo(): Promise<void> {
   storageFooter.textContent = `База: ${formatBytes(usage)}`;
 }
 
+const IMPORTANT_DIAGNOSTICS =
+  /не найдена дата|Внимание|ошибка|403|429|captcha|защит|checkpoint не найден|не распознан/i;
+
 function renderDiagnostics(items: string[]): void {
   diagnostics.replaceChildren();
-  for (const text of items.slice(-30)) {
+  // Важные строки поднимаем наверх: при сборе десятков страниц обычный список
+  // из последних 30 строк их просто вытесняет.
+  const important = items.filter((text) => IMPORTANT_DIAGNOSTICS.test(text));
+  const rest = items.filter((text) => !IMPORTANT_DIAGNOSTICS.test(text)).slice(-30);
+  for (const text of [...new Set([...important, ...rest])].slice(0, 60)) {
     const item = document.createElement('li');
     item.textContent = text;
     diagnostics.append(item);
@@ -373,7 +380,9 @@ async function createPackage(mode: 'single' | 'split'): Promise<void> {
       };
       promptPreview.value = packet.markdown;
       copyButton.textContent = 'Копировать весь prompt';
-      packageStatus.textContent = `${selectedFormats.length} единый файл(а) готовы: ${packet.post_count} новых постов и ${packet.context_count} связанных старых.`;
+      const periodLine = packet.markdown.match(/^Период новых сообщений: .*$/m)?.[0] || '';
+      packageStatus.textContent =
+        `${selectedFormats.length} единый файл(а) готовы: ${packet.post_count} новых постов и ${packet.context_count} связанных старых. ${periodLine}`.trim();
       for (const format of selectedFormats) {
         const file = files[format];
         downloadText(file[0], file[1], file[2]);

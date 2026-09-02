@@ -148,13 +148,19 @@ export function renderSavedReports(
     container.textContent = 'Пока нет сохранённых ответов ИИ.';
     return;
   }
-  for (const report of reports) {
+  for (const [index, report] of reports.entries()) {
     const facts = report.structured_facts;
     const item = doc.createElement('div');
     item.className = 'saved-report';
 
     const title = doc.createElement('strong');
     title.textContent = facts.title || 'Сводка без названия';
+    if (index === 0 && reports.length > 1) {
+      const latest = doc.createElement('span');
+      latest.className = 'report-badge report-latest';
+      latest.textContent = 'последняя выжимка';
+      title.append(' ', latest);
+    }
 
     const sections = [
       ['Важные новости', facts.important_news],
@@ -180,11 +186,17 @@ export function renderSavedReports(
       .filter(Boolean)
       .join(' · ');
 
+    const summaryBox = doc.createElement('details');
+    summaryBox.className = 'report-summary-box';
+    summaryBox.open = true;
+    const summaryCaption = doc.createElement('summary');
+    summaryCaption.textContent = 'Сводка';
     const summary = doc.createElement('div');
     summary.className = 'report-summary';
     summary.textContent = report.parsed_summary || 'Сводка пустая.';
+    summaryBox.append(summaryCaption, summary);
 
-    item.append(title, meta, summary);
+    item.append(title, meta, summaryBox);
 
     for (const [caption] of sections) {
       const own = [...groups.values()].filter((entry) => entry.caption === caption);

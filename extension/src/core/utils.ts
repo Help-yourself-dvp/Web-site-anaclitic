@@ -131,7 +131,7 @@ const MONTH_BY_NAME: Record<string, number> = {
  * post date out of a table row that also contains other numbers.
  */
 export const FORUM_DATE_PATTERN =
-  /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|\b\d{1,2}\s+[а-яa-z]{3,10}\.?\s+\d{4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|(?:^|[^\wа-яё])(?:сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*\d{1,2}:\d{2}|\b\d{1,2}:\d{2}\b/gi;
+  /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|\b\d{1,2}\s+[а-яa-z]{3,10}\.?\s+\d{4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|(?:^|[^\wа-яё])(?:сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*\d{1,2}:\d{2}/gi;
 
 export function firstDateLikeText(text: string): string {
   const matches = text.match(FORUM_DATE_PATTERN) || [];
@@ -234,18 +234,6 @@ export function parseForumDate(raw: string, reference: Date = new Date()): Date 
       base.getDate(),
       Number.parseInt(relative[2] || '0', 10),
       Number.parseInt(relative[3] || '0', 10),
-      0,
-    );
-  }
-
-  const timeOnly = /^(\d{1,2}):(\d{2})$/.exec(text);
-  if (timeOnly) {
-    return localDate(
-      reference.getFullYear(),
-      reference.getMonth() + 1,
-      reference.getDate(),
-      Number.parseInt(timeOnly[1] || '0', 10),
-      Number.parseInt(timeOnly[2] || '0', 10),
       0,
     );
   }

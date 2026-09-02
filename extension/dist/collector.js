@@ -81,7 +81,7 @@
     nov: 11,
     dec: 12
   };
-  var FORUM_DATE_PATTERN = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|\b\d{1,2}\s+[а-яa-z]{3,10}\.?\s+\d{4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|(?:^|[^\wа-яё])(?:сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*\d{1,2}:\d{2}|\b\d{1,2}:\d{2}\b/gi;
+  var FORUM_DATE_PATTERN = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|\b\d{1,2}\s+[а-яa-z]{3,10}\.?\s+\d{4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|(?:^|[^\wа-яё])(?:сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*\d{1,2}:\d{2}/gi;
   function firstDateLikeText(text) {
     const matches = text.match(FORUM_DATE_PATTERN) || [];
     const withTime = matches.find((item) => /\d{1,2}:\d{2}/.test(item));
@@ -158,17 +158,6 @@
         0
       );
     }
-    const timeOnly = /^(\d{1,2}):(\d{2})$/.exec(text);
-    if (timeOnly) {
-      return localDate(
-        reference.getFullYear(),
-        reference.getMonth() + 1,
-        reference.getDate(),
-        Number.parseInt(timeOnly[1] || "0", 10),
-        Number.parseInt(timeOnly[2] || "0", 10),
-        0
-      );
-    }
     const parsed = Date.parse(text);
     return Number.isFinite(parsed) ? new Date(parsed) : null;
   }
@@ -210,13 +199,22 @@
     push(element);
     return roots;
   }
+  var NOISE_FOR_DATE_SEARCH = `${POST_BODY_MARKERS}, blockquote, .quote, .blockquote, .post_quote, script, style`;
+  function dateSearchText(root) {
+    if (typeof root.querySelectorAll !== "function") return root.textContent || "";
+    const element = root;
+    if (!element.querySelector(NOISE_FOR_DATE_SEARCH)) return element.textContent || "";
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll(NOISE_FOR_DATE_SEARCH).forEach((node) => node.remove());
+    return clone.textContent || "";
+  }
   function parsePostedAt(roots, selectors) {
     const list = Array.isArray(roots) ? roots : [roots];
     let unparsedRaw = "";
     for (const root of list) {
       const element = queryFirst(root, selectors);
       const elementTextValue = element ? normalizeWhitespace(element.getAttribute("datetime") || element.textContent || "") : "";
-      const rootText = normalizeWhitespace(root.textContent || "");
+      const rootText = normalizeWhitespace(dateSearchText(root));
       const raw = elementTextValue || firstDateLikeText(rootText);
       if (!raw) continue;
       const parsed = parseForumDate(raw);

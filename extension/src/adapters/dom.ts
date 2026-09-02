@@ -56,6 +56,22 @@ export function dateCandidateRoots(element: Element, metadataRoot: Element): Par
   return roots;
 }
 
+const NOISE_FOR_DATE_SEARCH = `${POST_BODY_MARKERS}, blockquote, .quote, .blockquote, .post_quote, script, style`;
+
+/**
+ * Текст контейнера без тела сообщения и цитат. Внутри поста встречаются свои
+ * даты и время («был в 13:27», дата в цитате), и без этой обрезки они
+ * принимались за дату публикации — так в отчёте появлялись «сегодняшние» даты.
+ */
+function dateSearchText(root: ParentNode): string {
+  if (typeof (root as Element).querySelectorAll !== 'function') return root.textContent || '';
+  const element = root as Element;
+  if (!element.querySelector(NOISE_FOR_DATE_SEARCH)) return element.textContent || '';
+  const clone = element.cloneNode(true) as Element;
+  clone.querySelectorAll(NOISE_FOR_DATE_SEARCH).forEach((node) => node.remove());
+  return clone.textContent || '';
+}
+
 export function parsePostedAt(roots: ParentNode | ParentNode[], selectors: string[]): string | null {
   const list = Array.isArray(roots) ? roots : [roots];
   let unparsedRaw = '';
@@ -64,7 +80,7 @@ export function parsePostedAt(roots: ParentNode | ParentNode[], selectors: strin
     const elementTextValue = element
       ? normalizeWhitespace(element.getAttribute('datetime') || element.textContent || '')
       : '';
-    const rootText = normalizeWhitespace(root.textContent || '');
+    const rootText = normalizeWhitespace(dateSearchText(root));
     // The post stamp is printed right after the «Сообщение #N» permalink and
     // before the body, so the first stamp in the row is the one we need. The
     // last one can be an «отредактировано …» mark from inside the message.

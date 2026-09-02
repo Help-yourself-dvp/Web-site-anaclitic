@@ -508,3 +508,13 @@ label select {
 .report-remove {
   margin-top: 6px;
 }
+
+.report-summary-box > summary {
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--primary);
+}
+.report-latest {
+  background: #e7f4ea;
+  color: #1c7c3c;
+}
