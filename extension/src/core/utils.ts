@@ -133,12 +133,43 @@ const MONTH_BY_NAME: Record<string, number> = {
 export const FORUM_DATE_PATTERN =
   /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|\b\d{1,2}\s+[а-яa-z]{3,10}\.?\s+\d{4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|(?:^|[^\wа-яё])(?:сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*\d{1,2}:\d{2}/gi;
 
+export interface DateLikeMatch {
+  value: string;
+  withTime: boolean;
+}
+
+/**
+ * «Регистрация: 16.05.15» стоит в той же строке таблицы, что и сообщение
+ * (диагностический лог 4PDA это подтверждает: класс .postdetails). Без этой
+ * проверки такая дата становилась датой поста, и год уезжал в 2011–2015.
+ */
+const DATE_CONTEXT_NOISE = /(?:регистрац\w*|зарегистрир\w*|registration|joined|рег\.)\s*:?[^\d]{0,8}$/i;
+
+export function dateLikeMatches(text: string): DateLikeMatch[] {
+  const found: DateLikeMatch[] = [];
+  for (const match of text.matchAll(FORUM_DATE_PATTERN)) {
+    const start = match.index ?? 0;
+    const value = match[0].trim();
+    if (!value) continue;
+    if (DATE_CONTEXT_NOISE.test(text.slice(Math.max(0, start - 40), start))) continue;
+    found.push({ value, withTime: /\d{1,2}:\d{2}/.test(value) });
+  }
+  return found;
+}
+
 export function firstDateLikeText(text: string): string {
-  const matches = text.match(FORUM_DATE_PATTERN) || [];
-  // A post stamp always has a time. Dates without one are usually something
-  // else in the same table row, for example «Регистрация: 01.01.24».
-  const withTime = matches.find((item) => /\d{1,2}:\d{2}/.test(item));
-  return (withTime || matches[0] || '').trim();
+  const matches = dateLikeMatches(text);
+  return (matches.find((item) => item.withTime) || matches[0])?.value || '';
+}
+
+/** Тот же поиск, но берём самый близкий к концу текста штамп. */
+export function lastDateLikeText(text: string): string {
+  const matches = dateLikeMatches(text);
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const item = matches[index];
+    if (item?.withTime) return item.value;
+  }
+  return matches[matches.length - 1]?.value || '';
 }
 
 function localDate(

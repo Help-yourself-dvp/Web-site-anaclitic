@@ -1,4 +1,5 @@
 import { adapterByName } from './adapters';
+import { POST_BODY_MARKERS, precedingHeaderText } from './adapters/dom';
 import { checkpointMatches, deduplicatePosts } from './core/collection';
 import { parseTopicId, sleep, clampInteger, normalizeUrl, normalizeWhitespace } from './core/utils';
 import type { CollectorMessage, CollectorOptions } from './core/messages';
@@ -162,6 +163,21 @@ function diagnosticClassName(element: Element): string {
   return `${element.tagName.toLowerCase()}${classes ? `.${classes}` : ''}${element.id ? `#${element.id}` : ''}`;
 }
 
+/**
+ * Область поста без тела сообщения: именно здесь лежит штамп даты.
+ * В прошлой версии в логе не было ни одной даты, и понять, где форум её
+ * печатает, было нельзя.
+ */
+function postRegionHtml(element: Element): string {
+  let region: Element | null = element.parentElement;
+  while (region?.parentElement && region.parentElement.querySelectorAll(POST_BODY_MARKERS).length <= 1) {
+    region = region.parentElement;
+  }
+  const clone = (region || element).cloneNode(true) as Element;
+  clone.querySelectorAll(`${POST_BODY_MARKERS}, script, style, img`).forEach((node) => node.remove());
+  return truncate(clone.outerHTML, 2500);
+}
+
 function makeDiagnosticReport(adapterName: string): { json: string; markdown: string } {
   const protection = protectionFromDocument(document, location.href);
   const selectorCounts = Object.fromEntries(
@@ -204,8 +220,30 @@ function makeDiagnosticReport(adapterName: string): { json: string; markdown: st
     const elements = Array.from(document.querySelectorAll(selector)).slice(0, 3);
     if (elements.length) samples[selector] = elements.map(diagnosticHtml);
   }
+  const bodyElements = Array.from(document.querySelectorAll(POST_BODY_MARKERS));
+  const parsedDocument = adapterByName(adapterName).parse(document, location.href, {
+    sourceId: 'diagnostic',
+    topicId: parseTopicId(location.href),
+    imageMode: 'links',
+    imageKeywords: [],
+  });
+  const postsWithDate = parsedDocument.posts.filter((post) => post.posted_at).length;
+  const dateSamples = parsedDocument.posts.slice(0, 5).map((post, index) => {
+    const element = bodyElements[index] || null;
+    const preceding = element ? precedingHeaderText(element) : '';
+    return {
+      post_id: post.post_id,
+      posted_at: post.posted_at,
+      preceding_text: truncate(normalizeWhitespace(preceding), 400),
+      region_html: element ? postRegionHtml(element) : '',
+    };
+  });
   const report = {
-    diagnostic_version: '1.0',
+    diagnostic_version: '1.1',
+    post_bodies_on_page: bodyElements.length,
+    posts_with_date: postsWithDate,
+    posts_without_date: parsedDocument.posts.length - postsWithDate,
+    post_date_samples: dateSamples,
     generated_at: new Date().toISOString(),
     url: location.href,
     title: document.title,
@@ -246,6 +284,20 @@ function makeDiagnosticReport(adapterName: string): { json: string; markdown: st
     JSON.stringify(linkSamples, null, 2),
     '```',
     '',
+    '## Даты сообщений на этой странице',
+    `- Тел сообщений найдено: ${bodyElements.length}`,
+    `- Постов с датой: ${postsWithDate}`,
+    `- Постов без даты: ${parsedDocument.posts.length - postsWithDate}`,
+    '',
+    ...dateSamples.flatMap((sample) => [
+      `### post-${sample.post_id || 'без-id'}`,
+      `- Дата: ${sample.posted_at || 'НЕ НАЙДЕНА'}`,
+      `- Текст перед телом: «${sample.preceding_text || 'пусто'}»`,
+      '```html',
+      sample.region_html,
+      '```',
+      '',
+    ]),
     '## Примеры HTML по известным селекторам',
     ...Object.entries(samples).flatMap(([selector, html]) => [
       `### ${selector}`,

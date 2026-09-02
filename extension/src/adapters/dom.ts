@@ -1,6 +1,7 @@
 import type { ImageMode, ForumPost, LinkRecord, Quote } from '../core/types';
 import {
   firstDateLikeText,
+  lastDateLikeText,
   normalizeUrl,
   normalizeWhitespace,
   nowIso,
@@ -29,7 +30,7 @@ export function titleFromDocument(document: Document): string {
   return normalizeWhitespace(document.title || '') || 'Без названия';
 }
 
-const POST_BODY_MARKERS =
+export const POST_BODY_MARKERS =
   'div.postcolor, .post_content, .postcontent, .post-content, .post_body, .post-body, .entry-content';
 
 /**
@@ -72,7 +73,42 @@ function dateSearchText(root: ParentNode): string {
   return clone.textContent || '';
 }
 
-export function parsePostedAt(roots: ParentNode | ParentNode[], selectors: string[]): string | null {
+/**
+ * Текст, который стоит ПЕРЕД телом сообщения. В классической разметке 4PDA штамп
+ * «Сообщение #N … 12.08.26, 13:27» лежит не внутри div.postcolor, а рядом с ним,
+ * поэтому поиск по контейнеру его не находил. Поднимаемся вверх только пока в
+ * родителе одно тело сообщения — дата соседнего поста сюда попасть не может.
+ */
+export function precedingHeaderText(element: Element, limit = 3000): string {
+  const parts: string[] = [];
+  let node: Element | null = element;
+  let total = 0;
+  while (node && total < limit) {
+    const parent: Element | null = node.parentElement;
+    if (!parent) break;
+    if (parent.querySelectorAll(POST_BODY_MARKERS).length > 1) break;
+    const chunk: string[] = [];
+    for (
+      let sibling: Element | null = node.previousElementSibling;
+      sibling && total < limit;
+      sibling = sibling.previousElementSibling
+    ) {
+      const text = normalizeWhitespace(dateSearchText(sibling));
+      if (!text) continue;
+      chunk.unshift(text);
+      total += text.length;
+    }
+    if (chunk.length) parts.unshift(chunk.join(' '));
+    node = parent;
+  }
+  return parts.join(' ');
+}
+
+export function parsePostedAt(
+  roots: ParentNode | ParentNode[],
+  selectors: string[],
+  precedingText = '',
+): string | null {
   const list = Array.isArray(roots) ? roots : [roots];
   let unparsedRaw = '';
   for (const root of list) {
@@ -89,6 +125,15 @@ export function parsePostedAt(roots: ParentNode | ParentNode[], selectors: strin
     const parsed = parseForumDate(raw);
     if (parsed) return parsed.toISOString();
     if (!unparsedRaw) unparsedRaw = raw;
+  }
+  if (!unparsedRaw && precedingText) {
+    // Текст перед телом может содержать и чужие числа, поэтому здесь доверяем
+    // только полному штампу с временем.
+    const raw = lastDateLikeText(precedingText);
+    if (raw && /\d{1,2}:\d{2}/.test(raw)) {
+      const parsed = parseForumDate(raw);
+      if (parsed) return parsed.toISOString();
+    }
   }
   return unparsedRaw || null;
 }
@@ -274,9 +319,13 @@ export function extractPost(
     elementText(metadataRoot, config.authorSelectors) ||
     elementText(element, config.authorSelectors) ||
     'Неизвестный автор';
+  // dateRoot — только первый кандидат. Раньше поиск на нём обрывался, и если
+  // штампа внутри ячейки post-main не было, пост оставался без даты вовсе.
+  const candidateRoots = dateCandidateRoots(element, metadataRoot);
   const postedAt = parsePostedAt(
-    dateRoot ? [dateRoot] : dateCandidateRoots(element, metadataRoot),
+    dateRoot ? [dateRoot, ...candidateRoots] : candidateRoots,
     config.dateSelectors,
+    precedingHeaderText(element),
   );
   const quotes = extractQuotes(bodyRoot, pageUrl);
   const links = extractLinks(bodyRoot, pageUrl);

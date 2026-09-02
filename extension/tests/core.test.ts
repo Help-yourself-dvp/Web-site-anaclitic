@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { parseHTML } from 'linkedom';
 import { describe, expect, it } from 'vitest';
 import { fourPdaAdapter } from '../src/adapters';
+import { precedingHeaderText } from '../src/adapters/dom';
 import { findLastPageUrl, findPreviousPageUrl } from '../src/adapters/pagination';
 import {
   checkpointMatches,
@@ -727,5 +728,65 @@ describe('сводку можно свернуть', () => {
     renderSavedReports(container, reports);
     expect(container.textContent).toContain('последняя выжимка');
     expect(container.querySelectorAll('.report-latest').length).toBe(1);
+  });
+});
+
+describe('дата поста в реальной разметке 4PDA из диагностического лога', () => {
+  const options = {
+    sourceId: '4pda:1108618',
+    topicId: '1108618',
+    imageMode: 'links' as const,
+    imageKeywords: [] as string[],
+    manualSelection: null,
+  };
+  const parseTopic = (html: string) => {
+    const { document } = parseHTML(html);
+    return fourPdaAdapter.parse(
+      document as unknown as Document,
+      'https://4pda.to/forum/index.php?showtopic=1108618&st=13260',
+      options,
+    );
+  };
+  const stamp = (iso: string | null): string | null => {
+    if (!iso) return null;
+    const value = new Date(iso);
+    return [value.getFullYear(), value.getMonth() + 1, value.getDate(), value.getHours(), value.getMinutes()].join('-');
+  };
+  // Так устроен пост 4PDA: ячейка автора (post1, внутри .postdetails есть
+  // «Регистрация: 16.05.15») и ячейка сообщения (post2, id="post-main-<id>").
+  const row = (id: string, posted: string, author: string): string =>
+    `<tr>
+       <td class="post1" id="post-${id}-name">
+         <span class="postdetails"><span class="normalname"><a href="https://4pda.to/forum/index.php?showuser=1">${author}</a></span>
+         Группа: Постоянный Сообщений: 8214 Регистрация: 16.05.15</span>
+         Отправлено: ${posted}
+       </td>
+       <td class="post2" id="post-main-${id}">
+         <a href="https://4pda.to/forum/index.php?showtopic=1108618&view=findpost&p=${id}">#${id}</a>
+         <div class="postcolor " id="post-${id}">Текст сообщения ${id} с вопросом по прошивке</div>
+       </td>
+     </tr>`;
+  const table = `<table>${row('144641377', '12.08.26, 13:27', 'Sheiest')}${row('144641893', '12.08.26, 23:15', 'redialplease')}</table>`;
+
+  it('штамп находится, даже когда его нет в ячейке post-main', () => {
+    const result = parseTopic(table);
+    expect(result.posts.length).toBe(2);
+    expect(result.posts.map((item) => stamp(item.posted_at))).toEqual(['2026-8-12-13-27', '2026-8-12-23-15']);
+  });
+
+  it('дата регистрации автора не становится датой поста', () => {
+    expect(firstDateLikeText('Группа: Постоянный Сообщений: 8214 Регистрация: 16.05.15')).toBe('');
+    const result = parseTopic(table);
+    expect(result.posts.every((item) => !(item.posted_at || '').startsWith('2015'))).toBe(true);
+  });
+
+  it('текст перед телом даёт штамп своего поста и не тянет соседний', () => {
+    const { document } = parseHTML(table);
+    const bodies = Array.from(document.querySelectorAll('div.postcolor'));
+    const first = precedingHeaderText(bodies[0] as unknown as Element);
+    const second = precedingHeaderText(bodies[1] as unknown as Element);
+    expect(first).toContain('12.08.26, 13:27');
+    expect(first).not.toContain('23:15');
+    expect(second).toContain('12.08.26, 23:15');
   });
 });

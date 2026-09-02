@@ -101,10 +101,29 @@
     dec: 12
   };
   var FORUM_DATE_PATTERN = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|\b\d{1,2}\s+[а-яa-z]{3,10}\.?\s+\d{4}(?:\s*(?:,|г\.?)?\s*\d{1,2}:\d{2}(?::\d{2})?)?|(?:^|[^\wа-яё])(?:сегодня|вчера|today|yesterday)\s*(?:,|\s)\s*\d{1,2}:\d{2}/gi;
+  var DATE_CONTEXT_NOISE = /(?:регистрац\w*|зарегистрир\w*|registration|joined|рег\.)\s*:?[^\d]{0,8}$/i;
+  function dateLikeMatches(text) {
+    const found = [];
+    for (const match of text.matchAll(FORUM_DATE_PATTERN)) {
+      const start = match.index ?? 0;
+      const value = match[0].trim();
+      if (!value) continue;
+      if (DATE_CONTEXT_NOISE.test(text.slice(Math.max(0, start - 40), start))) continue;
+      found.push({ value, withTime: /\d{1,2}:\d{2}/.test(value) });
+    }
+    return found;
+  }
   function firstDateLikeText(text) {
-    const matches = text.match(FORUM_DATE_PATTERN) || [];
-    const withTime = matches.find((item) => /\d{1,2}:\d{2}/.test(item));
-    return (withTime || matches[0] || "").trim();
+    const matches = dateLikeMatches(text);
+    return (matches.find((item) => item.withTime) || matches[0])?.value || "";
+  }
+  function lastDateLikeText(text) {
+    const matches = dateLikeMatches(text);
+    for (let index = matches.length - 1; index >= 0; index -= 1) {
+      const item = matches[index];
+      if (item?.withTime) return item.value;
+    }
+    return matches[matches.length - 1]?.value || "";
   }
   function localDate(year, month, day, hour, minute, second) {
     const date = new Date(year, month - 1, day, hour, minute, second);
@@ -227,7 +246,27 @@
     clone.querySelectorAll(NOISE_FOR_DATE_SEARCH).forEach((node) => node.remove());
     return clone.textContent || "";
   }
-  function parsePostedAt(roots, selectors) {
+  function precedingHeaderText(element, limit = 3e3) {
+    const parts = [];
+    let node = element;
+    let total = 0;
+    while (node && total < limit) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      if (parent.querySelectorAll(POST_BODY_MARKERS).length > 1) break;
+      const chunk = [];
+      for (let sibling = node.previousElementSibling; sibling && total < limit; sibling = sibling.previousElementSibling) {
+        const text = normalizeWhitespace(dateSearchText(sibling));
+        if (!text) continue;
+        chunk.unshift(text);
+        total += text.length;
+      }
+      if (chunk.length) parts.unshift(chunk.join(" "));
+      node = parent;
+    }
+    return parts.join(" ");
+  }
+  function parsePostedAt(roots, selectors, precedingText = "") {
     const list = Array.isArray(roots) ? roots : [roots];
     let unparsedRaw = "";
     for (const root of list) {
@@ -239,6 +278,13 @@
       const parsed = parseForumDate(raw);
       if (parsed) return parsed.toISOString();
       if (!unparsedRaw) unparsedRaw = raw;
+    }
+    if (!unparsedRaw && precedingText) {
+      const raw = lastDateLikeText(precedingText);
+      if (raw && /\d{1,2}:\d{2}/.test(raw)) {
+        const parsed = parseForumDate(raw);
+        if (parsed) return parsed.toISOString();
+      }
     }
     return unparsedRaw || null;
   }
@@ -360,9 +406,11 @@
     }
     const canonicalPostUrl = permalinkUrl || fallbackPostUrl;
     const author = elementText(authorRoot || metadataRoot, config.authorSelectors) || elementText(metadataRoot, config.authorSelectors) || elementText(element, config.authorSelectors) || "\u041D\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043D\u044B\u0439 \u0430\u0432\u0442\u043E\u0440";
+    const candidateRoots = dateCandidateRoots(element, metadataRoot);
     const postedAt = parsePostedAt(
-      dateRoot ? [dateRoot] : dateCandidateRoots(element, metadataRoot),
-      config.dateSelectors
+      dateRoot ? [dateRoot, ...candidateRoots] : candidateRoots,
+      config.dateSelectors,
+      precedingHeaderText(element)
     );
     const quotes = extractQuotes(bodyRoot, pageUrl);
     const links = extractLinks(bodyRoot, pageUrl);
