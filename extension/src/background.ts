@@ -2,6 +2,7 @@ import { sourceForUrl } from './adapters';
 import { clearBackgroundSource, readBackgroundCheck, runBackgroundCheck } from './background-check';
 import {
   clearAllData,
+  deleteReport,
   getAllSources,
   getLatestRun,
   deletePostsByKeys,
@@ -579,6 +580,9 @@ async function handle(request: BackgroundRequest): Promise<BackgroundResponse> {
       return runDiagnostic(request.url);
     case 'search-local':
       return { ok: true, search: await searchLocal(request.query) };
+    case 'delete-report':
+      await deleteReport(request.reportId);
+      return { ok: true, message: 'Выжимка удалена.' };
     case 'import-ai':
       return importResponse(request);
     case 'test-companion': {

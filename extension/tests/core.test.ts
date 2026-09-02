@@ -637,3 +637,29 @@ describe('выжимка без повторов и лишнего', () => {
     expect(result.duplicate).toBe(false);
   });
 });
+
+describe('удаление одной выжимки', () => {
+  it('показывает кнопку и передаёт идентификатор отчёта', () => {
+    const report = importAiResponse('## Сводка\nТекст', 'source', 'topic').report;
+    const { document } = parseHTML('<div id="reports"></div>');
+    const container = document.getElementById('reports') as unknown as HTMLElement;
+    let removed: string | null = null;
+    renderSavedReports(container, [report], (reportId) => {
+      removed = reportId;
+    });
+    const button = container.querySelector('.report-remove');
+    expect(button?.textContent).toBe('Удалить эту выжимку');
+    const view = (container as unknown as { ownerDocument: { defaultView: typeof globalThis } }).ownerDocument
+      .defaultView;
+    button?.dispatchEvent(new view.Event('click'));
+    expect(removed).toBe(report.report_id);
+  });
+
+  it('без обработчика кнопку удаления не показывает', () => {
+    const report = importAiResponse('## Сводка\nТекст', 'source', 'topic').report;
+    const { document } = parseHTML('<div id="reports"></div>');
+    const container = document.getElementById('reports') as unknown as HTMLElement;
+    renderSavedReports(container, [report]);
+    expect(container.querySelector('.report-remove')).toBe(null);
+  });
+});

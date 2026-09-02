@@ -137,7 +137,11 @@ function groupSections(sections: ReadonlyArray<readonly [string, AiSectionItem[]
   return { groups, merged };
 }
 
-export function renderSavedReports(container: HTMLElement, reports: ReportRecord[]): void {
+export function renderSavedReports(
+  container: HTMLElement,
+  reports: ReportRecord[],
+  onDelete?: (reportId: string) => void,
+): void {
   const doc = container.ownerDocument;
   container.replaceChildren();
   if (reports.length === 0) {
@@ -258,6 +262,14 @@ export function renderSavedReports(container: HTMLElement, reports: ReportRecord
       }
       body.append(list);
     });
+
+    if (onDelete) {
+      const remove = doc.createElement('button');
+      remove.className = 'danger-button report-remove';
+      remove.textContent = 'Удалить эту выжимку';
+      remove.addEventListener('click', () => onDelete(report.report_id));
+      item.append(remove);
+    }
 
     const raw = doc.createElement('details');
     const rawCaption = doc.createElement('summary');

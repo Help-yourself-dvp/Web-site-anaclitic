@@ -20,6 +20,7 @@ export type BackgroundRequest =
   | { type: 'search-local'; query: string }
   | { type: 'run-diagnostic'; url: string }
   | { type: 'import-ai'; raw: string; sourceId?: string; topicId?: string }
+  | { type: 'delete-report'; reportId: string }
   | { type: 'get-settings' }
   | { type: 'save-settings'; settings: ExtensionSettings }
   | { type: 'test-companion' }

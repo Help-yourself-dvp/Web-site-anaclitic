@@ -139,7 +139,17 @@ function renderState(state: ExtensionState): void {
     item.append(meta, link);
     recentPosts.append(item);
   }
-  renderSavedReports(savedReports, state.recentReports);
+  renderSavedReports(savedReports, state.recentReports, (reportId) => {
+    if (!window.confirm('Удалить эту выжимку и её карточки Q&A?')) return;
+    void send({ type: 'delete-report', reportId }).then(async (response) => {
+      if (!response.ok) {
+        setStatus(response.error, 'error');
+        return;
+      }
+      setStatus('Выжимка удалена.', 'success');
+      await refresh();
+    });
+  });
 }
 
 function formatBytes(bytes: number): string {

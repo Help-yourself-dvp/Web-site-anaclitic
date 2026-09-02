@@ -1196,6 +1196,17 @@ ${entry.detailed_answer}`;
       db.close();
     }
   }
+  async function deleteReport(reportId) {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(["reports", "qa"], "readwrite");
+      tx.objectStore("reports").delete(reportId);
+      tx.objectStore("qa").delete(IDBKeyRange.bound(`${reportId}:`, `${reportId}:\uFFFF`));
+      await transactionDone(tx);
+    } finally {
+      db.close();
+    }
+  }
   async function getQa(sourceId) {
     const db = await openDatabase();
     try {
@@ -2947,6 +2958,9 @@ ${entry.detailed_answer}`.toLocaleLowerCase().includes(normalized)
         return runDiagnostic(request.url);
       case "search-local":
         return { ok: true, search: await searchLocal(request.query) };
+      case "delete-report":
+        await deleteReport(request.reportId);
+        return { ok: true, message: "\u0412\u044B\u0436\u0438\u043C\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0430." };
       case "import-ai":
         return importResponse(request);
       case "test-companion": {

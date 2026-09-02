@@ -250,6 +250,19 @@ export async function putReport(report: ReportRecord): Promise<void> {
   }
 }
 
+export async function deleteReport(reportId: string): Promise<void> {
+  const db = await openDatabase();
+  try {
+    const tx = db.transaction(['reports', 'qa'], 'readwrite');
+    tx.objectStore('reports').delete(reportId);
+    // Карточки Q&A лежат под ключами вида «<report_id>:<номер>».
+    tx.objectStore('qa').delete(IDBKeyRange.bound(`${reportId}:`, `${reportId}:\uffff`));
+    await transactionDone(tx);
+  } finally {
+    db.close();
+  }
+}
+
 export async function getQa(sourceId?: string): Promise<AiQaEntry[]> {
   const db = await openDatabase();
   try {

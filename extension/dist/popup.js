@@ -809,7 +809,7 @@
     }
     return { groups, merged };
   }
-  function renderSavedReports(container, reports) {
+  function renderSavedReports(container, reports, onDelete) {
     const doc = container.ownerDocument;
     container.replaceChildren();
     if (reports.length === 0) {
@@ -918,6 +918,13 @@
         }
         body.append(list);
       });
+      if (onDelete) {
+        const remove = doc.createElement("button");
+        remove.className = "danger-button report-remove";
+        remove.textContent = "\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u044D\u0442\u0443 \u0432\u044B\u0436\u0438\u043C\u043A\u0443";
+        remove.addEventListener("click", () => onDelete(report.report_id));
+        item.append(remove);
+      }
       const raw = doc.createElement("details");
       const rawCaption = doc.createElement("summary");
       rawCaption.textContent = "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u043F\u043E\u043B\u043D\u044B\u0439 \u043E\u0442\u0432\u0435\u0442 \u0418\u0418";
@@ -1064,7 +1071,17 @@
       item.append(meta, link);
       recentPosts.append(item);
     }
-    renderSavedReports(savedReports, state.recentReports);
+    renderSavedReports(savedReports, state.recentReports, (reportId) => {
+      if (!window.confirm("\u0423\u0434\u0430\u043B\u0438\u0442\u044C \u044D\u0442\u0443 \u0432\u044B\u0436\u0438\u043C\u043A\u0443 \u0438 \u0435\u0451 \u043A\u0430\u0440\u0442\u043E\u0447\u043A\u0438 Q&A?")) return;
+      void send({ type: "delete-report", reportId }).then(async (response) => {
+        if (!response.ok) {
+          setStatus(response.error, "error");
+          return;
+        }
+        setStatus("\u0412\u044B\u0436\u0438\u043C\u043A\u0430 \u0443\u0434\u0430\u043B\u0435\u043D\u0430.", "success");
+        await refresh();
+      });
+    });
   }
   function formatBytes(bytes) {
     if (bytes < 1024) return `${bytes} \u0411`;
